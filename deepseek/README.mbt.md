@@ -10,20 +10,24 @@ The HTTP client lives in `bobzhang/openseek/deepseek/client`.
 
 - `Model`: current DeepSeek chat model names, with `Show` for wire strings and
   `Debug` for inspection.
+- `ThinkingMode` and `ReasoningEffort`: typed controls for DeepSeek V4 thinking
+  mode (`enabled`/`disabled`) and effort (`high`/`max`).
 - `Role`: `System`, `User`, `Assistant`, and `Tool(tool_call_id)`, with `Show`
   for wire strings and `Debug` for inspection.
 - `ChatMessage(role, content)`: one typed chat message constructor with
   `ToJson` for DeepSeek wire encoding.
 - `ChatMessage::assistant_tool_calls(tool_calls)`: build the assistant message
-  that must be sent back after DeepSeek requests native tool calls.
+  that must be sent back after DeepSeek requests native tool calls. Pass
+  `reasoning_content` when continuing a thinking-mode tool-call round.
 - `FunctionTool(name, description, parameters, strict?)`: a native DeepSeek
   function tool definition with a JSON Schema parameters object.
 - `ToolCall(id~, name~, arguments~)`: a decoded function call request from the
   model; `arguments` is the raw JSON string from the API.
-- `Conversation(model, messages, json_response?, tools?)`: one typed chat
-  request with `ToJson` for DeepSeek request body encoding.
+- `Conversation(model, messages, json_response?, tools?, thinking?,
+  reasoning_effort?)`: one typed chat request with `ToJson` for DeepSeek
+  request body encoding.
 - `Usage` and `ChatResponse`: decoded response values with `Debug`; responses
-  include `tool_calls`.
+  include `reasoning_content` and `tool_calls`.
 - `decode_chat_response(text)`: decode a DeepSeek chat response body.
 
 ## Native Tool Calls
@@ -50,10 +54,13 @@ test "encode chat request values" {
     model,
     [message],
     json_response=true,
+    thinking=Some(Enabled),
+    reasoning_effort=Some(High),
   )
   let body = ToJson::to_json(conversation)
   assert_true(body.stringify().contains("\"json_object\""))
   assert_true(body.stringify().contains("\"messages\""))
+  assert_true(body.stringify().contains("\"reasoning_effort\":\"high\""))
 }
 ```
 

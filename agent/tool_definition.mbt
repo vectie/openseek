@@ -21,14 +21,6 @@ async fn ToolExecutor::run(self : ToolExecutor, arguments : Json) -> ToolResult 
 }
 
 ///|
-fn system_prompt() -> String {
-  [
-    "You are OpenSeek, a small MoonBit coding agent.", "Use the provided tools when you need to inspect or modify the workspace.",
-    "Use finish when the task is complete.", "Prefer small MoonBit changes. Use ///| block separators. Run moon check or moon test before finish when code changed.",
-  ].join("\n")
-}
-
-///|
 fn function_tools() -> Array[@deepseek.FunctionTool] {
   [
     for tool in tool_definitions() => {
@@ -52,8 +44,11 @@ fn tool_definitions() -> Array[ToolDefinition] {
   [
     {
       name: "shell",
-      description: "Run arguments.cmd through sh -c and return exit code plus output.",
-      schema: object_schema({ "cmd": string_schema() }, ["cmd"]),
+      description: "Run arguments.cmd through sh -c, optionally in arguments.cwd, and return exit code plus output.",
+      schema: object_schema(
+        { "cmd": string_schema(), "cwd": string_schema() },
+        ["cmd"],
+      ),
       execute: Async(execute_shell),
     },
     {

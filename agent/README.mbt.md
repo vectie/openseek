@@ -22,12 +22,23 @@ returned tool calls, and sends tool results back with `Tool(call.id)` messages.
 The loop stops when the model answers directly, calls the `finish` tool, or the
 step limit is reached.
 
+The agent client enables DeepSeek V4 thinking mode explicitly with
+`thinking=enabled` and `reasoning_effort=max`. When DeepSeek returns
+`reasoning_content` with tool calls, the agent preserves it in the assistant
+tool-call message for the next request.
+
+The system prompt embeds the handwritten `moonbit-agent-guide` skill content
+verbatim before the user task, then appends a short OpenSeek-specific addendum
+from real DeepSeek runs. This keeps MoonBit-specific syntax, package layout, and
+validation rules in the cache-friendly prefix, which is useful because DeepSeek
+has limited MoonBit knowledge compared with mainstream languages.
+
 ## Tools
 
 The agent exposes four local tools to DeepSeek:
 
-- `shell`: runs `arguments.cmd` through `sh -c` and returns exit code plus
-  merged output.
+- `shell`: runs `arguments.cmd` through `sh -c`, optionally in `arguments.cwd`,
+  and returns exit code plus merged output.
 - `read`: reads `arguments.path` as text.
 - `write`: overwrites `arguments.path` with `arguments.content`.
 - `finish`: ends the task with `arguments.answer`.
@@ -46,3 +57,31 @@ Run the package tests with:
 ```bash
 moon test agent
 ```
+
+## Real-World Run Notes
+
+The DeepSeek V4-Pro TOML-parser trials showed useful cache behavior after the
+stable prompt prefix, but also surfaced MoonBit-specific failure modes to keep
+improving:
+
+- The model needs concrete MoonBit examples, especially for package manifests,
+  type aliases, mutable record fields, map construction, and error handling.
+- The model repeatedly imported Rust habits. The prompt now calls out that
+  MoonBit has no postfix `?` unwrapping for `Result`; generated code should
+  match on `Ok`/`Err` or catch raising functions explicitly.
+- Parser examples should include exact receiver annotations, string APIs, and
+  unit syntax: `fn Parser::peek(self : Parser)`, `get_char`, `to_owned`, and
+  `()` instead of `{}` for no-op branches.
+- Long parser loops should avoid leaving `while` as the final expression of a
+  function returning `Result`; put the final `Ok(...)`/`Err(...)` after the
+  loop or return from explicit branches.
+- The full-guide rerun improved API discovery and cache behavior, but still
+  needed addendum guidance for native CLI imports, blackbox `Debug` tests,
+  unqualified enum constructors under known types, and avoiding panicking
+  `Map::at` when building nested tables.
+- Long runs should be observable while they are running; buffered stdout makes
+  stalled runs look silent until a large chunk of logs appears.
+- Real workspace commands need a first-class working directory. The `shell`
+  tool now accepts optional `cwd` to avoid repeated ad hoc `cd` command strings.
+- Step limits should eventually be configurable from the CLI; real coding tasks
+  can exceed a fixed small budget before validation succeeds.

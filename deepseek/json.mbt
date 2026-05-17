@@ -15,6 +15,11 @@ pub impl ToJson for ChatMessage with to_json(self : ChatMessage) -> Json {
   if self.tool_calls.length() > 0 {
     fields.set("tool_calls", ToJson::to_json(self.tool_calls))
   }
+  match self.reasoning_content {
+    Some(reasoning_content) =>
+      fields.set("reasoning_content", Json::string(reasoning_content))
+    None => ()
+  }
   Json::object(fields)
 }
 
@@ -68,6 +73,21 @@ pub impl ToJson for Conversation with to_json(self : Conversation) -> Json {
           ]
         } else {
           []
+        },
+        ..match self.thinking {
+          Some(thinking) =>
+            [
+              (
+                "thinking",
+                Json::object({ "type": Json::string(thinking.to_string()) }),
+              ),
+            ]
+          None => []
+        },
+        ..match self.reasoning_effort {
+          Some(reasoning_effort) =>
+            [("reasoning_effort", Json::string(reasoning_effort.to_string()))]
+          None => []
         },
       ],
     ),
@@ -188,19 +208,41 @@ test "function tools encode as native DeepSeek tools" {
 ///|
 test "assistant tool call messages encode tool_calls" {
   let body = ToJson::to_json(
-    ChatMessage::assistant_tool_calls([
-      ToolCall(
-        id="call_123",
-        name="get_weather",
-        arguments="{\"location\":\"Hangzhou\"}",
-      ),
-    ]),
+    ChatMessage::assistant_tool_calls(
+      [
+        ToolCall(
+          id="call_123",
+          name="get_weather",
+          arguments="{\"location\":\"Hangzhou\"}",
+        ),
+      ],
+      reasoning_content="checked available tools",
+    ),
   )
   let text = body.stringify()
   assert_true(text.contains("\"role\":\"assistant\""))
   assert_true(text.contains("\"content\":null"))
   assert_true(text.contains("\"tool_calls\""))
   assert_true(text.contains("\"id\":\"call_123\""))
+  assert_true(
+    text.contains("\"reasoning_content\":\"checked available tools\""),
+  )
+}
+
+///|
+test "conversation encodes thinking controls" {
+  let body = ToJson::to_json(
+    Conversation(
+      V4Pro,
+      [ChatMessage(User, "solve")],
+      thinking=Some(Enabled),
+      reasoning_effort=Some(Max),
+    ),
+  )
+  let text = body.stringify()
+  assert_true(text.contains("\"thinking\""))
+  assert_true(text.contains("\"type\":\"enabled\""))
+  assert_true(text.contains("\"reasoning_effort\":\"max\""))
 }
 
 ///|
@@ -234,11 +276,17 @@ pub fn decode_chat_response(text : String) -> ChatResponse raise {
     None if tool_calls.length() > 0 => ""
     _ => fail("DeepSeek response message is missing content: \{text}")
   }
+  let reasoning_content = match message_fields.get("reasoning_content") {
+    Some(String(reasoning_content)) => reasoning_content
+    Some(Null) | None => ""
+    _ =>
+      fail("DeepSeek response message has invalid reasoning_content: \{text}")
+  }
   let usage = match parsed_fields.get("usage") {
     Some(usage) => Usage::from_json(usage)
     None => Usage::empty()
   }
-  { content, tool_calls, usage }
+  { content, reasoning_content, tool_calls, usage }
 }
 
 ///|
@@ -295,16 +343,18 @@ test "parse chat response extracts content and usage" {
   assert_eq(response.usage.prompt_cache_hit_tokens, 7)
   assert_eq(response.usage.prompt_cache_miss_tokens, 3)
   assert_eq(response.tool_calls.length(), 0)
+  assert_eq(response.reasoning_content, "")
 }
 
 ///|
 test "parse chat response extracts native tool calls" {
   let response = decode_chat_response(
     (
-      #|{"choices":[{"finish_reason":"tool_calls","message":{"content":null,"role":"assistant","tool_calls":[{"id":"call_123","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\"Hangzhou\"}"}}]}}],"usage":{"total_tokens":20}}
+      #|{"choices":[{"finish_reason":"tool_calls","message":{"content":null,"reasoning_content":"need current weather","role":"assistant","tool_calls":[{"id":"call_123","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\"Hangzhou\"}"}}]}}],"usage":{"total_tokens":20}}
     ),
   )
   assert_eq(response.content, "")
+  assert_eq(response.reasoning_content, "need current weather")
   assert_eq(response.tool_calls.length(), 1)
   assert_eq(response.tool_calls[0].id, "call_123")
   assert_eq(response.tool_calls[0].name, "get_weather")

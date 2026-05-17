@@ -52,11 +52,15 @@ test "assistant tool call roundtrip message encoding" {
     name="shell",
     arguments="{\"cmd\":\"moon test\"}",
   )
-  let message = @deepseek.ChatMessage::assistant_tool_calls([call])
+  let message = @deepseek.ChatMessage::assistant_tool_calls(
+    [call],
+    reasoning_content="run tests first",
+  )
   let text = ToJson::to_json(message).stringify()
   assert_true(text.contains("\"role\":\"assistant\""))
   assert_true(text.contains("\"content\":null"))
   assert_true(text.contains("\"tool_calls\""))
+  assert_true(text.contains("\"reasoning_content\":\"run tests first\""))
   assert_true(
     text.contains("\"arguments\":\"{\\\"cmd\\\":\\\"moon test\\\"}\""),
   )
@@ -72,4 +76,16 @@ test "model parsing" {
     @deepseek.Model::parse("deepseek-v4-pro").to_string(),
     "deepseek-v4-pro",
   )
+}
+
+///|
+test "thinking controls stringify" {
+  let enabled : @deepseek.ThinkingMode = Enabled
+  let disabled : @deepseek.ThinkingMode = Disabled
+  let high : @deepseek.ReasoningEffort = High
+  let max : @deepseek.ReasoningEffort = Max
+  assert_eq(enabled.to_string(), "enabled")
+  assert_eq(disabled.to_string(), "disabled")
+  assert_eq(high.to_string(), "high")
+  assert_eq(max.to_string(), "max")
 }

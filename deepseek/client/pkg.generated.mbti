@@ -14,9 +14,11 @@ import {
 pub struct Client {
   model : @deepseek.Model
   api_url : String
+  thinking : @deepseek.ThinkingMode?
+  reasoning_effort : @deepseek.ReasoningEffort?
   // private fields
 } derive(@debug.Debug)
-pub fn Client::Client(api_key~ : String, model? : @deepseek.Model, api_url? : String) -> Self
+pub fn Client::Client(api_key~ : String, model? : @deepseek.Model, api_url? : String, thinking? : @deepseek.ThinkingMode?, reasoning_effort? : @deepseek.ReasoningEffort?) -> Self
 pub async fn Client::chat(Self, Array[@deepseek.ChatMessage], json_response? : Bool, tools? : Array[@deepseek.FunctionTool]) -> @deepseek.ChatResponse
 
 // Type aliases

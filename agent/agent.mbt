@@ -1,5 +1,5 @@
 ///|
-let max_steps : Int = 20
+let max_steps : Int = 60
 
 ///|
 /// Runs the OpenSeek agent loop for a single task.
@@ -8,7 +8,12 @@ pub async fn run(
   model : @deepseek.Model,
   task : String,
 ) -> Unit {
-  let client = @client.Client(api_key~, model~)
+  let client = @client.Client(
+    api_key~,
+    model~,
+    thinking=Some(Enabled),
+    reasoning_effort=Some(Max),
+  )
   let messages : Array[@deepseek.ChatMessage] = [
     ChatMessage(System, system_prompt()),
     ChatMessage(User, task),
@@ -26,7 +31,10 @@ pub async fn run(
       return
     }
     messages.push(
-      @deepseek.ChatMessage::assistant_tool_calls(response.tool_calls),
+      @deepseek.ChatMessage::assistant_tool_calls(
+        response.tool_calls,
+        reasoning_content=response.reasoning_content,
+      ),
     )
     for native_call in response.tool_calls {
       let tool_call = AgentToolCall(native_call) catch {

@@ -7,11 +7,11 @@ variables, and calls `bobzhang/openseek/agent.run`.
 ## Command
 
 ```bash
-moon run cmd/main -- [--api-key sk-...] [--model deepseek-v4-flash] "task text"
+moon run cmd/main -- [--api-key sk-...] [--model deepseek-v4-pro] "task text"
 ```
 
 `--api-key` can also be supplied with `DEEPSEEK`. `--model` can also be supplied
-with `DEEPSEEK_MODEL`; it defaults to `deepseek-v4-flash`.
+with `DEEPSEEK_MODEL`; it defaults to `deepseek-v4-pro`.
 
 ## Examples
 
@@ -21,7 +21,7 @@ moon run cmd/main -- "run moon test and summarize the result"
 ```
 
 ```bash
-DEEPSEEK_MODEL=deepseek-v4-pro moon run cmd/main -- "inspect the package docs"
+DEEPSEEK_MODEL=deepseek-v4-flash moon run cmd/main -- "inspect the package docs"
 ```
 
 ## Package Boundary

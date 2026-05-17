@@ -25,6 +25,38 @@ pub fn Model::parse(input : String) -> Model raise {
 }
 
 ///|
+/// DeepSeek thinking mode request toggle.
+pub(all) enum ThinkingMode {
+  Enabled
+  Disabled
+} derive(Eq, Debug)
+
+///|
+/// Returns the DeepSeek wire name for a thinking mode toggle.
+pub impl Show for ThinkingMode with to_string(self : ThinkingMode) -> String {
+  match self {
+    Enabled => "enabled"
+    Disabled => "disabled"
+  }
+}
+
+///|
+/// DeepSeek reasoning effort for thinking mode.
+pub(all) enum ReasoningEffort {
+  High
+  Max
+} derive(Eq, Debug)
+
+///|
+/// Returns the DeepSeek wire name for a reasoning effort.
+pub impl Show for ReasoningEffort with to_string(self : ReasoningEffort) -> String {
+  match self {
+    High => "high"
+    Max => "max"
+  }
+}
+
+///|
 /// DeepSeek chat message roles.
 ///
 /// `Tool(tool_call_id)` represents a tool response message and carries the
@@ -56,20 +88,31 @@ pub struct ChatMessage {
   role : Role
   content : String
   tool_calls : Array[ToolCall]
+  reasoning_content : String?
 } derive(Debug)
 
 ///|
 /// Constructs a typed chat message.
 pub fn ChatMessage::ChatMessage(role : Role, content : String) -> ChatMessage {
-  { role, content, tool_calls: [] }
+  { role, content, tool_calls: [], reasoning_content: None }
 }
 
 ///|
 /// Constructs an assistant message that records model-requested tool calls.
 pub fn ChatMessage::assistant_tool_calls(
   tool_calls : Array[ToolCall],
+  reasoning_content? : String = "",
 ) -> ChatMessage {
-  { role: Assistant, content: "", tool_calls }
+  {
+    role: Assistant,
+    content: "",
+    tool_calls,
+    reasoning_content: if reasoning_content == "" {
+      None
+    } else {
+      Some(reasoning_content)
+    },
+  }
 }
 
 ///|
@@ -81,6 +124,8 @@ pub struct Conversation {
   messages : Array[ChatMessage]
   json_response : Bool
   tools : Array[FunctionTool]
+  thinking : ThinkingMode?
+  reasoning_effort : ReasoningEffort?
 } derive(Debug)
 
 ///|
@@ -90,8 +135,10 @@ pub fn Conversation::Conversation(
   messages : Array[ChatMessage],
   json_response? : Bool = false,
   tools? : Array[FunctionTool] = [],
+  thinking? : ThinkingMode? = None,
+  reasoning_effort? : ReasoningEffort? = None,
 ) -> Conversation {
-  { model, messages, json_response, tools }
+  { model, messages, json_response, tools, thinking, reasoning_effort }
 }
 
 ///|
@@ -108,6 +155,7 @@ pub struct Usage {
 /// Decoded DeepSeek chat response content and token usage.
 pub struct ChatResponse {
   content : String
+  reasoning_content : String
   tool_calls : Array[ToolCall]
   usage : Usage
 } derive(Debug)

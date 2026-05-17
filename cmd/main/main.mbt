@@ -24,7 +24,7 @@ fn cli_command() -> @argparse.Command {
         "model",
         long="model",
         env="DEEPSEEK_MODEL",
-        default_values=[@deepseek.V4Flash.to_string()],
+        default_values=[@deepseek.V4Pro.to_string()],
         about="DeepSeek model: deepseek-v4-flash or deepseek-v4-pro.",
       ),
     ],
@@ -65,4 +65,12 @@ test "cli parses env backed options and task" {
   assert_eq(value(parsed, "api-key"), "test-key")
   assert_eq(value(parsed, "model"), "deepseek-v4-pro")
   assert_eq(values(parsed, "task").join(" "), "write MoonBit")
+}
+
+///|
+test "cli defaults to v4 pro" {
+  let parsed = cli_command().parse(argv=["write", "MoonBit"], env={
+    "DEEPSEEK": "test-key",
+  })
+  assert_eq(value(parsed, "model"), "deepseek-v4-pro")
 }

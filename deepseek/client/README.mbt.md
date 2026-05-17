@@ -9,8 +9,9 @@ The package depends on `moonbitlang/async/http` and is native-only.
 
 ## API Shape
 
-- `Client(api_key~, model?, api_url?)`: configure the API key, typed model, and
-  optional endpoint override.
+- `Client(api_key~, model?, api_url?, thinking?, reasoning_effort?)`: configure
+  the API key, typed model, optional endpoint override, and optional DeepSeek V4
+  thinking controls.
 - `Client::chat(messages, json_response?, tools?)`: send typed chat messages,
   optionally with native DeepSeek function tools, and decode the response.
 
@@ -19,7 +20,8 @@ The package depends on `moonbitlang/async/http` and is native-only.
 ## Request Behavior
 
 `Client::chat` builds a `@deepseek.Conversation` with the client's configured
-model and sends it to `api_url` as JSON. It always sends `stream=false`.
+model, thinking mode, and reasoning effort, then sends it to `api_url` as JSON.
+It always sends `stream=false`.
 
 Use `json_response=true` only when the response should be a JSON object. Use
 `tools=[...]` when the model should call native DeepSeek function tools. Tool
@@ -33,14 +35,22 @@ body. Successful responses are decoded with `@deepseek.decode_chat_response`.
 
 The default endpoint is `https://api.deepseek.com/chat/completions`, and the
 default model is `deepseek-v4-flash`. Tests and examples use placeholder API
-keys unless explicitly marked as real API smoke tests.
+keys unless explicitly marked as real API smoke tests. Pass
+`thinking=Some(Enabled)` and `reasoning_effort=Some(Max)` for explicit
+thinking-mode agent requests.
 
 ```moonbit check
 ///|
 test "construct DeepSeek client" {
-  let client = @client.Client(api_key="test-key", model=V4Pro)
+  let client = @client.Client(
+    api_key="test-key",
+    model=V4Pro,
+    thinking=Some(Enabled),
+    reasoning_effort=Some(Max),
+  )
   inspect(client.model, content="deepseek-v4-pro")
   assert_eq(client.api_url, "https://api.deepseek.com/chat/completions")
+  debug_inspect(client.reasoning_effort, content="Some(Max)")
 
   let message = @deepseek.ChatMessage(User, "ping")
   inspect(message.role, content="user")

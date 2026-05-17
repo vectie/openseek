@@ -15,12 +15,14 @@ async fn execute_tool_call(call : AgentToolCall) -> ToolResult {
 ///|
 async fn execute_shell(arguments : Json) -> ToolResult {
   match required_string_argument(arguments, "shell", "cmd") {
-    Ok(cmd) =>
+    Ok(cmd) => {
+      let cwd = optional_string_argument(arguments, "cwd")
       continue_result(
-        shell(cmd) catch {
+        shell(cmd, cwd) catch {
           error => "error running shell: \{error}"
         },
       )
+    }
     Err(error) => continue_result("error: \{error}")
   }
 }
@@ -71,7 +73,10 @@ fn continue_result(output : String) -> ToolResult {
 }
 
 ///|
-async fn shell(cmd : String) -> String {
-  let (code, output) = @process.collect_output_merged("sh", ["-c", cmd])
+async fn shell(cmd : String, cwd : String?) -> String {
+  let (code, output) = match cwd {
+    Some(cwd) => @process.collect_output_merged("sh", ["-c", cmd], cwd~)
+    None => @process.collect_output_merged("sh", ["-c", cmd])
+  }
   "exit=\{code}\n\{output.text()}"
 }

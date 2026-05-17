@@ -15,13 +15,15 @@ pub struct ChatMessage {
   role : Role
   content : String
   tool_calls : Array[ToolCall]
+  reasoning_content : String?
 } derive(@debug.Debug)
 pub fn ChatMessage::ChatMessage(Role, String) -> Self
-pub fn ChatMessage::assistant_tool_calls(Array[ToolCall]) -> Self
+pub fn ChatMessage::assistant_tool_calls(Array[ToolCall], reasoning_content? : String) -> Self
 pub impl ToJson for ChatMessage
 
 pub struct ChatResponse {
   content : String
+  reasoning_content : String
   tool_calls : Array[ToolCall]
   usage : Usage
 } derive(@debug.Debug)
@@ -31,8 +33,10 @@ pub struct Conversation {
   messages : Array[ChatMessage]
   json_response : Bool
   tools : Array[FunctionTool]
+  thinking : ThinkingMode?
+  reasoning_effort : ReasoningEffort?
 } derive(@debug.Debug)
-pub fn Conversation::Conversation(Model, Array[ChatMessage], json_response? : Bool, tools? : Array[FunctionTool]) -> Self
+pub fn Conversation::Conversation(Model, Array[ChatMessage], json_response? : Bool, tools? : Array[FunctionTool], thinking? : ThinkingMode?, reasoning_effort? : ReasoningEffort?) -> Self
 pub impl ToJson for Conversation
 
 pub struct FunctionTool {
@@ -51,6 +55,12 @@ pub(all) enum Model {
 pub fn Model::parse(String) -> Self raise
 pub impl Show for Model
 
+pub(all) enum ReasoningEffort {
+  High
+  Max
+} derive(Eq, @debug.Debug)
+pub impl Show for ReasoningEffort
+
 pub(all) enum Role {
   System
   User
@@ -58,6 +68,12 @@ pub(all) enum Role {
   Tool(String)
 } derive(Eq, @debug.Debug)
 pub impl Show for Role
+
+pub(all) enum ThinkingMode {
+  Enabled
+  Disabled
+} derive(Eq, @debug.Debug)
+pub impl Show for ThinkingMode
 
 pub struct ToolCall {
   id : String
