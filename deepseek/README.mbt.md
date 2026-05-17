@@ -12,7 +12,8 @@ The HTTP client lives in `bobzhang/openseek/deepseek/client`.
   `Debug` for inspection.
 - `Role`: `System`, `User`, `Assistant`, and `Tool(tool_call_id)`, with `Show`
   for wire strings and `Debug` for inspection.
-- `ChatMessage(role, content)`: one typed chat message constructor.
+- `ChatMessage(role, content)`: one typed chat message constructor with
+  `ToJson` for DeepSeek wire encoding.
 - `Usage` and `ChatResponse`: decoded response values with `Debug`.
 - `encode_chat_request(model, messages, json_response?)`: encode a chat request
   as JSON.
@@ -26,6 +27,9 @@ test "encode chat request values" {
   inspect(model, content="deepseek-v4-flash")
   inspect(message.role, content="user")
   assert_eq(message.content, "write a MoonBit test")
+  assert_true(
+    ToJson::to_json(message).stringify().contains("\"role\":\"user\""),
+  )
 
   let body = @deepseek.encode_chat_request(model, [message], json_response=true)
   assert_true(body.stringify().contains("\"json_object\""))

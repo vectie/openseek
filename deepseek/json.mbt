@@ -1,5 +1,5 @@
 ///|
-fn ChatMessage::to_json(self : ChatMessage) -> Json {
+pub impl ToJson for ChatMessage with to_json(self : ChatMessage) -> Json {
   let fields : Map[String, Json] = {
     "role": self.role.to_string(),
     "content": self.content,
@@ -13,12 +13,31 @@ fn ChatMessage::to_json(self : ChatMessage) -> Json {
 
 ///|
 fn Usage::from_json(json : Json) -> Usage {
+  let fields = match json {
+    Object(fields) => fields
+    _ => Map([])
+  }
   {
-    prompt_tokens: field_int(json, "prompt_tokens"),
-    completion_tokens: field_int(json, "completion_tokens"),
-    total_tokens: field_int(json, "total_tokens"),
-    prompt_cache_hit_tokens: field_int(json, "prompt_cache_hit_tokens"),
-    prompt_cache_miss_tokens: field_int(json, "prompt_cache_miss_tokens"),
+    prompt_tokens: match fields.get("prompt_tokens") {
+      Some(Number(n, ..)) => n.to_int()
+      _ => 0
+    },
+    completion_tokens: match fields.get("completion_tokens") {
+      Some(Number(n, ..)) => n.to_int()
+      _ => 0
+    },
+    total_tokens: match fields.get("total_tokens") {
+      Some(Number(n, ..)) => n.to_int()
+      _ => 0
+    },
+    prompt_cache_hit_tokens: match fields.get("prompt_cache_hit_tokens") {
+      Some(Number(n, ..)) => n.to_int()
+      _ => 0
+    },
+    prompt_cache_miss_tokens: match fields.get("prompt_cache_miss_tokens") {
+      Some(Number(n, ..)) => n.to_int()
+      _ => 0
+    },
   }
 }
 
@@ -45,7 +64,7 @@ pub fn encode_chat_request(
     Map(
       [
         ("model", Json::string(model.to_string())),
-        ("messages", Json::array(messages.map(message => message.to_json()))),
+        ("messages", ToJson::to_json(messages)),
         ("stream", Json::boolean(false)),
         ..if json_response {
           [
@@ -72,7 +91,10 @@ test "request body can request json output" {
   let text = body.stringify()
   assert_true(text.contains("\"response_format\""))
   assert_true(text.contains("\"json_object\""))
-  guard field(body, "response_format") is Some(Object(format)) else {
+  guard body is Object(body_fields) else {
+    fail("request body is not an object")
+  }
+  guard body_fields.get("response_format") is Some(Object(format)) else {
     fail("missing response_format")
   }
   guard format.get("type") is Some(String("json_object")) else {
@@ -98,19 +120,28 @@ test "tool messages include tool call id" {
 /// Missing usage information is represented as zero token counts.
 pub fn decode_chat_response(text : String) -> ChatResponse raise {
   let parsed = @json.parse(text)
-  guard field(parsed, "choices") is Some(Array(choices)) else {
+  guard parsed is Object(parsed_fields) else {
+    fail("DeepSeek response is missing choices: \{text}")
+  }
+  guard parsed_fields.get("choices") is Some(Array(choices)) else {
     fail("DeepSeek response is missing choices: \{text}")
   }
   guard choices.length() > 0 else {
     fail("DeepSeek response has empty choices: \{text}")
   }
-  guard field(choices[0], "message") is Some(message) else {
+  guard choices[0] is Object(choice_fields) else {
     fail("DeepSeek response choice is missing message: \{text}")
   }
-  guard field(message, "content") is Some(String(content)) else {
+  guard choice_fields.get("message") is Some(message) else {
+    fail("DeepSeek response choice is missing message: \{text}")
+  }
+  guard message is Object(message_fields) else {
     fail("DeepSeek response message is missing content: \{text}")
   }
-  let usage = match field(parsed, "usage") {
+  guard message_fields.get("content") is Some(String(content)) else {
+    fail("DeepSeek response message is missing content: \{text}")
+  }
+  let usage = match parsed_fields.get("usage") {
     Some(usage) => Usage::from_json(usage)
     None => Usage::empty()
   }
@@ -132,20 +163,4 @@ test "parse chat response extracts content and usage" {
   assert_eq(response.usage.completion_tokens, 4)
   assert_eq(response.usage.prompt_cache_hit_tokens, 7)
   assert_eq(response.usage.prompt_cache_miss_tokens, 3)
-}
-
-///|
-fn field(json : Json, key : String) -> Json? {
-  match json {
-    Object(fields) => fields.get(key)
-    _ => None
-  }
-}
-
-///|
-fn field_int(json : Json, key : String) -> Int {
-  match field(json, key) {
-    Some(Number(n, ..)) => n.to_int()
-    _ => 0
-  }
 }

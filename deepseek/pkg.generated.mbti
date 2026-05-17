@@ -18,6 +18,7 @@ pub struct ChatMessage {
   content : String
 } derive(@debug.Debug)
 pub fn ChatMessage::ChatMessage(Role, String) -> Self
+pub impl ToJson for ChatMessage
 
 pub struct ChatResponse {
   content : String

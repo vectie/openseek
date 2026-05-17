@@ -48,17 +48,25 @@ pub async fn run(
         continue
       }
     }
-    guard field(action_json, "action") is Some(String(action)) else {
+    guard action_json is Object(action_fields) else {
       messages.push(ChatMessage(User, "error: missing string field action"))
       continue
     }
-    let args = match field(action_json, "args") {
+    guard action_fields.get("action") is Some(String(action)) else {
+      messages.push(ChatMessage(User, "error: missing string field action"))
+      continue
+    }
+    let args = match action_fields.get("args") {
       Some(args) => args
       None => Json::object(Map([]))
     }
     if action == "finish" {
-      let answer = match field(args, "answer") {
-        Some(String(answer)) => answer
+      let answer = match args {
+        Object(args_fields) =>
+          match args_fields.get("answer") {
+            Some(String(answer)) => answer
+            _ => ""
+          }
         _ => ""
       }
       println("=== finished ===")
@@ -76,7 +84,10 @@ pub async fn run(
 async fn dispatch(action : String, args : Json) -> String {
   match action {
     "shell" => {
-      guard field(args, "cmd") is Some(String(cmd)) else {
+      guard args is Object(args_fields) else {
+        return "error: shell requires args.cmd"
+      }
+      guard args_fields.get("cmd") is Some(String(cmd)) else {
         return "error: shell requires args.cmd"
       }
       shell(cmd) catch {
@@ -84,7 +95,10 @@ async fn dispatch(action : String, args : Json) -> String {
       }
     }
     "read" => {
-      guard field(args, "path") is Some(String(path)) else {
+      guard args is Object(args_fields) else {
+        return "error: read requires args.path"
+      }
+      guard args_fields.get("path") is Some(String(path)) else {
         return "error: read requires args.path"
       }
       @fs.read_file(path).text() catch {
@@ -92,10 +106,13 @@ async fn dispatch(action : String, args : Json) -> String {
       }
     }
     "write" => {
-      guard field(args, "path") is Some(String(path)) else {
+      guard args is Object(args_fields) else {
         return "error: write requires args.path and args.content"
       }
-      guard field(args, "content") is Some(String(content)) else {
+      guard args_fields.get("path") is Some(String(path)) else {
+        return "error: write requires args.path and args.content"
+      }
+      guard args_fields.get("content") is Some(String(content)) else {
         return "error: write requires args.path and args.content"
       }
       try {
@@ -113,14 +130,6 @@ async fn dispatch(action : String, args : Json) -> String {
 async fn shell(cmd : String) -> String {
   let (code, output) = @process.collect_output_merged("sh", ["-c", cmd])
   "exit=\{code}\n\{output.text()}"
-}
-
-///|
-fn field(json : Json, key : String) -> Json? {
-  match json {
-    Object(fields) => fields.get(key)
-    _ => None
-  }
 }
 
 ///|
