@@ -41,15 +41,25 @@ pub fn encode_chat_request(
   messages : Array[ChatMessage],
   json_response? : Bool = false,
 ) -> Json {
-  let fields : Map[String, Json] = Map([
-    ("model", Json::string(model.to_string())),
-    ("messages", Json::array(messages.map(message => message.to_json()))),
-    ("stream", Json::boolean(false)),
-  ])
-  if json_response {
-    fields.set("response_format", { "type": "json_object" })
-  }
-  Json::object(fields)
+  Json::object(
+    Map(
+      [
+        ("model", Json::string(model.to_string())),
+        ("messages", Json::array(messages.map(message => message.to_json()))),
+        ("stream", Json::boolean(false)),
+        ..if json_response {
+          [
+            (
+              "response_format",
+              Json::object({ "type": Json::string("json_object") }),
+            ),
+          ]
+        } else {
+          []
+        },
+      ],
+    ),
+  )
 }
 
 ///|
@@ -62,6 +72,12 @@ test "request body can request json output" {
   let text = body.stringify()
   assert_true(text.contains("\"response_format\""))
   assert_true(text.contains("\"json_object\""))
+  guard field(body, "response_format") is Some(Object(format)) else {
+    fail("missing response_format")
+  }
+  guard format.get("type") is Some(String("json_object")) else {
+    fail("wrong response_format")
+  }
 }
 
 ///|
