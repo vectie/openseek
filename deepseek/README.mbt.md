@@ -18,7 +18,7 @@ The HTTP client lives in `bobzhang/openseek/deepseek/client`.
   that must be sent back after DeepSeek requests native tool calls.
 - `FunctionTool(name, description, parameters, strict?)`: a native DeepSeek
   function tool definition with a JSON Schema parameters object.
-- `ToolCall(id, name, arguments)`: a decoded function call request from the
+- `ToolCall(id~, name~, arguments~)`: a decoded function call request from the
   model; `arguments` is the raw JSON string from the API.
 - `Conversation(model, messages, json_response?, tools?)`: one typed chat
   request with `ToJson` for DeepSeek request body encoding.
@@ -75,7 +75,9 @@ test "encode native tool call values" {
   assert_true(body.contains("\"type\":\"function\""))
 
   let call = @deepseek.ToolCall(
-    "call_1", "read", "{\"path\":\"README.mbt.md\"}",
+    id="call_1",
+    name="read",
+    arguments="{\"path\":\"README.mbt.md\"}",
   )
   let message = @deepseek.ChatMessage::assistant_tool_calls([call])
   assert_true(ToJson::to_json(message).stringify().contains("\"tool_calls\""))

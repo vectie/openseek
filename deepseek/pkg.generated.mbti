@@ -64,7 +64,7 @@ pub struct ToolCall {
   name : String
   arguments : String
 } derive(@debug.Debug)
-pub fn ToolCall::ToolCall(String, String, String) -> Self
+pub fn ToolCall::ToolCall(id~ : String, name~ : String, arguments~ : String) -> Self
 pub impl ToJson for ToolCall
 
 pub struct Usage {

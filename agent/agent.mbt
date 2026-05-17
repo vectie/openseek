@@ -29,9 +29,8 @@ pub async fn run(
       @deepseek.ChatMessage::assistant_tool_calls(response.tool_calls),
     )
     for native_call in response.tool_calls {
-      let tool_call = match AgentToolCall::from_deepseek(native_call) {
-        Ok(tool_call) => tool_call
-        Err(error) => {
+      let tool_call = AgentToolCall(native_call) catch {
+        error => {
           println("tool: error: \{error}")
           messages.push(ChatMessage(Tool(native_call.id), "error: \{error}"))
           continue

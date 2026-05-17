@@ -189,7 +189,11 @@ test "function tools encode as native DeepSeek tools" {
 test "assistant tool call messages encode tool_calls" {
   let body = ToJson::to_json(
     ChatMessage::assistant_tool_calls([
-      ToolCall("call_123", "get_weather", "{\"location\":\"Hangzhou\"}"),
+      ToolCall(
+        id="call_123",
+        name="get_weather",
+        arguments="{\"location\":\"Hangzhou\"}",
+      ),
     ]),
   )
   let text = body.stringify()
@@ -272,7 +276,7 @@ fn ToolCall::from_json(json : Json, text : String) -> ToolCall raise {
   guard function_fields.get("arguments") is Some(String(arguments)) else {
     fail("DeepSeek tool call is missing function.arguments: \{text}")
   }
-  ToolCall(id, name, arguments)
+  ToolCall(id~, name~, arguments~)
 }
 
 ///|

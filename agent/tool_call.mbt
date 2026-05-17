@@ -17,13 +17,13 @@ priv struct AgentToolCall {
 }
 
 ///|
-fn AgentToolCall::from_deepseek(
+fn AgentToolCall::AgentToolCall(
   call : @deepseek.ToolCall,
-) -> Result[AgentToolCall, String] {
+) -> AgentToolCall raise {
   let arguments = @json.parse(call.arguments) catch {
-    _ => return Err("\{call.name} arguments are not valid JSON")
+    _ => fail("\{call.name} arguments are not valid JSON")
   }
-  Ok({ name: call.name, arguments })
+  { name: call.name, arguments }
 }
 
 ///|
@@ -43,10 +43,9 @@ fn required_string_argument(
 
 ///|
 test "parse native tool call arguments" {
-  let parsed = AgentToolCall::from_deepseek(
-    ToolCall("call_123", "shell", "{\"cmd\":\"moon check\"}"),
+  let call = AgentToolCall(
+    ToolCall(id="call_123", name="shell", arguments="{\"cmd\":\"moon check\"}"),
   )
-  guard parsed is Ok(call) else { fail("tool call did not parse") }
   assert_eq(call.name, "shell")
   guard required_string_argument(call.arguments, "shell", "cmd") is Ok(cmd) else {
     fail("missing cmd")
@@ -56,7 +55,11 @@ test "parse native tool call arguments" {
 
 ///|
 test "reject invalid native tool call arguments" {
-  let parsed = AgentToolCall::from_deepseek(ToolCall("call_123", "shell", "{"))
-  guard parsed is Err(error) else { fail("invalid arguments parsed") }
-  assert_true(error.contains("shell arguments are not valid JSON"))
+  let _ = AgentToolCall(ToolCall(id="call_123", name="shell", arguments="{")) catch {
+    error => {
+      assert_true("\{error}".contains("shell arguments are not valid JSON"))
+      return
+    }
+  }
+  fail("invalid arguments parsed")
 }

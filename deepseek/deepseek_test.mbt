@@ -47,7 +47,11 @@ test "native tool request encoding" {
 
 ///|
 test "assistant tool call roundtrip message encoding" {
-  let call = @deepseek.ToolCall("call_123", "shell", "{\"cmd\":\"moon test\"}")
+  let call = @deepseek.ToolCall(
+    id="call_123",
+    name="shell",
+    arguments="{\"cmd\":\"moon test\"}",
+  )
   let message = @deepseek.ChatMessage::assistant_tool_calls([call])
   let text = ToJson::to_json(message).stringify()
   assert_true(text.contains("\"role\":\"assistant\""))

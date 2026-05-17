@@ -41,9 +41,9 @@ pub struct ToolCall {
 ///|
 /// Constructs a typed DeepSeek tool call value.
 pub fn ToolCall::ToolCall(
-  id : String,
-  name : String,
-  arguments : String,
+  id~ : String,
+  name~ : String,
+  arguments~ : String,
 ) -> ToolCall {
   { id, name, arguments }
 }
