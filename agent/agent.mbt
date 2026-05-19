@@ -30,12 +30,18 @@ pub async fn run(
       println(response.content)
       return
     }
-    messages.push(
-      @deepseek.ChatMessage::assistant_tool_calls(
-        response.tool_calls,
+    let assistant_message : @deepseek.ChatMessage = if response.reasoning_content ==
+      "" {
+      ChatMessage(Assistant, "", tool_calls=response.tool_calls)
+    } else {
+      ChatMessage(
+        Assistant,
+        "",
+        tool_calls=response.tool_calls,
         reasoning_content=response.reasoning_content,
-      ),
-    )
+      )
+    }
+    messages.push(assistant_message)
     for native_call in response.tool_calls {
       let tool_call = AgentToolCall(native_call) catch {
         error => {

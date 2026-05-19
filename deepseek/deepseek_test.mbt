@@ -69,8 +69,10 @@ test "assistant tool call roundtrip message encoding" {
     name="shell",
     arguments="{\"cmd\":\"moon test\"}",
   )
-  let message = @deepseek.ChatMessage::assistant_tool_calls(
-    [call],
+  let message = @deepseek.ChatMessage(
+    Assistant,
+    "",
+    tool_calls=[call],
     reasoning_content="run tests first",
   )
   let text = ToJson::to_json(message).stringify()

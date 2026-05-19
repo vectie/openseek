@@ -208,8 +208,10 @@ test "function tools encode as native DeepSeek tools" {
 ///|
 test "assistant tool call messages encode tool_calls" {
   let body = ToJson::to_json(
-    ChatMessage::assistant_tool_calls(
-      [
+    ChatMessage(
+      Assistant,
+      "",
+      tool_calls=[
         ToolCall(
           id="call_123",
           name="get_weather",

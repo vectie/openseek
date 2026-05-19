@@ -14,11 +14,10 @@ The HTTP client lives in `bobzhang/openseek/deepseek/client`.
   mode (`enabled`/`disabled`) and effort (`high`/`max`).
 - `Role`: `System`, `User`, `Assistant`, and `Tool(tool_call_id)`, with `Show`
   for wire strings and `Debug` for inspection.
-- `ChatMessage(role, content)`: one typed chat message constructor with
-  `ToJson` for DeepSeek wire encoding.
-- `ChatMessage::assistant_tool_calls(tool_calls)`: build the assistant message
-  that must be sent back after DeepSeek requests native tool calls. Pass
-  `reasoning_content` when continuing a thinking-mode tool-call round.
+- `ChatMessage(role, content, tool_calls?, reasoning_content?)`: one typed chat
+  message constructor with `ToJson` for DeepSeek wire encoding. Use `Assistant`
+  with `tool_calls` for the assistant message that must be sent back after
+  DeepSeek requests native tool calls.
 - `FunctionTool(name, description, parameters, strict?)`: a native DeepSeek
   function tool definition with a JSON Schema parameters object.
 - `ToolCall(id~, name~, arguments~)`: a decoded function call request from the
@@ -86,7 +85,7 @@ test "encode native tool call values" {
     name="read",
     arguments="{\"path\":\"README.mbt.md\"}",
   )
-  let message = @deepseek.ChatMessage::assistant_tool_calls([call])
+  let message = @deepseek.ChatMessage(Assistant, "", tool_calls=[call])
   assert_true(ToJson::to_json(message).stringify().contains("\"tool_calls\""))
 }
 ```

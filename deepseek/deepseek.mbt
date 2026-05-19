@@ -103,24 +103,6 @@ pub fn ChatMessage::ChatMessage(
 }
 
 ///|
-/// Constructs an assistant message that records model-requested tool calls.
-pub fn ChatMessage::assistant_tool_calls(
-  tool_calls : Array[ToolCall],
-  reasoning_content? : String = "",
-) -> ChatMessage {
-  {
-    role: Assistant,
-    content: "",
-    tool_calls,
-    reasoning_content: if reasoning_content == "" {
-      None
-    } else {
-      Some(reasoning_content)
-    },
-  }
-}
-
-///|
 /// A complete DeepSeek chat request conversation.
 ///
 /// `json_response=true` requests a JSON object response format.
