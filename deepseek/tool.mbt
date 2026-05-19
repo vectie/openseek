@@ -1,10 +1,10 @@
 ///|
 /// A tool definition accepted by the DeepSeek chat completions API.
 ///
-/// `ToolDefinition` is the tool contract you send in `Conversation.tools` before
-/// the model chooses a tool. It advertises what local function exists, what it
-/// does, and what JSON Schema its arguments must follow. It is not a request to
-/// execute the function.
+/// `ToolDefinition` is the tool contract the client sends in the request
+/// `tools` field before the model chooses a tool. It advertises what local
+/// function exists, what it does, and what JSON Schema its arguments must
+/// follow. It is not a request to execute the function.
 ///
 /// `parameters` is a JSON Schema object describing the arguments the model may
 /// generate for this function.

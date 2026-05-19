@@ -13,7 +13,7 @@ async test "realworld DeepSeek API smoke test" {
     thinking=Some(Enabled),
     reasoning_effort=Some(High),
   )
-  let response = client.chat(json_response=true) <| [
+  let response = client.chat() <| [
       ChatMessage(
         System,
         (

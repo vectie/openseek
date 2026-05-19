@@ -29,34 +29,14 @@ test "chat message constructor keeps labeled fields" {
 }
 
 ///|
-test "chat request encoding" {
-  let body = ToJson::to_json(
-    @deepseek.Conversation(
-      V4Flash,
-      [ChatMessage(User, "hello")],
-      json_response=true,
-    ),
-  )
-  let text = body.stringify()
-  assert_true(text.contains("\"model\":\"deepseek-v4-flash\""))
-  assert_true(text.contains("\"role\":\"user\""))
-  assert_true(text.contains("\"response_format\""))
-}
-
-///|
-test "native tool request encoding" {
+test "native tool definition encoding" {
   let tool = @deepseek.ToolDefinition("shell", "Run a shell command.", {
     "type": "object",
     "properties": { "cmd": { "type": "string" } },
     "required": ["cmd"],
   })
-  let body = ToJson::to_json(
-    @deepseek.Conversation(V4Flash, [ChatMessage(User, "run tests")], tools=[
-      tool,
-    ]),
-  )
+  let body = ToJson::to_json(tool)
   let text = body.stringify()
-  assert_true(text.contains("\"tools\""))
   assert_true(text.contains("\"type\":\"function\""))
   assert_true(text.contains("\"name\":\"shell\""))
   assert_true(text.contains("\"required\""))

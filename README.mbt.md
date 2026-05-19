@@ -19,8 +19,7 @@ The `deepseek` subpackage is pure and exposes chat data plus JSON helpers:
 - `Model` and `Role`
 - `ChatMessage(role, content)` with strongly typed `Role` values
 - `ToolDefinition(name, description, parameters, strict?)` for native tool calls
-- `Conversation(model, messages, json_response?, tools?)` with `ToJson` request encoding
-- `decode_chat_response(...)`
+- `ChatResponse` with `FromJson` response decoding
 
 It has no HTTP dependency and is suitable for blackbox tests and portable
 request/response handling.
@@ -28,7 +27,7 @@ request/response handling.
 The `deepseek/client` subpackage exposes the HTTP client:
 
 - `Client(api_key~, model?, api_url?)`
-- `Client::chat(messages, json_response?, tools?)`
+- `Client::chat(messages, tools?)`
 
 It depends on `moonbitlang/async/http` and is native-only.
 

@@ -22,12 +22,9 @@ The HTTP client lives in `bobzhang/openseek/deepseek/client`.
   function tool definition with a JSON Schema parameters object.
 - `ToolCall(id~, name~, arguments~)`: a decoded function call request from the
   model; `arguments` is the raw JSON string from the API.
-- `Conversation(model, messages, json_response?, tools?, thinking?,
-  reasoning_effort?)`: one typed chat request with `ToJson` for DeepSeek
-  request body encoding.
 - `Usage` and `ChatResponse`: decoded response values with `Debug`; responses
-  include `reasoning_content` and `tool_calls`.
-- `decode_chat_response(text)`: decode a DeepSeek chat response body.
+  include `reasoning_content` and `tool_calls`. `ChatResponse` implements
+  `FromJson` for DeepSeek chat completions response envelopes.
 
 ## Native Tool Calls
 
@@ -43,13 +40,13 @@ tool-call message, execute each local function, then append
 
 | Type | Direction | Meaning |
 | --- | --- | --- |
-| `ToolDefinition` | Your code sends it to DeepSeek in `Conversation.tools`. | A tool definition: name, description, and JSON Schema for arguments. It advertises a function the model may request later. |
+| `ToolDefinition` | Your code sends it to DeepSeek through `Client::chat(..., tools=[...])`. | A tool definition: name, description, and JSON Schema for arguments. It advertises a function the model may request later. |
 | `ToolCall` | DeepSeek returns it in `ChatResponse.tool_calls`. | A concrete tool invocation request: generated call id, function name, and raw JSON argument string. |
 
 The usual sequence is:
 
 1. Define available tools with `ToolDefinition(...)`.
-2. Send them in `Conversation(..., tools=[...])` or `Client::chat(..., tools=[...])`.
+2. Send them with `Client::chat(..., tools=[...])`.
 3. Decode DeepSeek's response into `ToolCall` values.
 4. Append `ChatMessage(Assistant, "", tool_calls=response.tool_calls)` so the
    conversation records the model's requested calls.
@@ -58,7 +55,7 @@ The usual sequence is:
 
 ```moonbit check
 ///|
-test "encode chat request values" {
+test "encode chat message values" {
   let message = @deepseek.ChatMessage(User, "write a MoonBit test")
   let model : @deepseek.Model = V4Flash
   inspect(model, content="deepseek-v4-flash")
@@ -67,18 +64,6 @@ test "encode chat request values" {
   assert_true(
     ToJson::to_json(message).stringify().contains("\"role\":\"user\""),
   )
-
-  let conversation = @deepseek.Conversation(
-    model,
-    [message],
-    json_response=true,
-    thinking=Some(Enabled),
-    reasoning_effort=Some(High),
-  )
-  let body = ToJson::to_json(conversation)
-  assert_true(body.stringify().contains("\"json_object\""))
-  assert_true(body.stringify().contains("\"messages\""))
-  assert_true(body.stringify().contains("\"reasoning_effort\":\"high\""))
 }
 ```
 
@@ -90,13 +75,7 @@ test "encode native tool call values" {
     "properties": { "path": { "type": "string" } },
     "required": ["path"],
   })
-  let conversation = @deepseek.Conversation(
-    V4Flash,
-    [ChatMessage(User, "read README.mbt.md")],
-    tools=[tool],
-  )
-  let body = ToJson::to_json(conversation).stringify()
-  assert_true(body.contains("\"tools\""))
+  let body = ToJson::to_json(tool).stringify()
   assert_true(body.contains("\"type\":\"function\""))
 
   let call = @deepseek.ToolCall(
@@ -112,9 +91,11 @@ test "encode native tool call values" {
 ```moonbit check
 ///|
 test "decode chat response values" {
-  let response = @deepseek.decode_chat_response(
-    (
-      #|{"choices":[{"message":{"content":"ok"}}]}
+  let response : @deepseek.ChatResponse = @json.from_json(
+    @json.parse(
+      (
+        #|{"choices":[{"message":{"content":"ok"}}]}
+      ),
     ),
   )
   assert_eq(response.content, "ok")
@@ -125,9 +106,11 @@ test "decode chat response values" {
 ```moonbit check
 ///|
 test "decode native tool call values" {
-  let response = @deepseek.decode_chat_response(
-    (
-      #|{"choices":[{"message":{"content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"read","arguments":"{\"path\":\"README.mbt.md\"}"}}]}}]}
+  let response : @deepseek.ChatResponse = @json.from_json(
+    @json.parse(
+      (
+        #|{"choices":[{"message":{"content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"read","arguments":"{\"path\":\"README.mbt.md\"}"}}]}}]}
+      ),
     ),
   )
   assert_eq(response.tool_calls.length(), 1)

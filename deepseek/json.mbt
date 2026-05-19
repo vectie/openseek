@@ -52,49 +52,6 @@ pub impl ToJson for ToolCall with to_json(self : ToolCall) -> Json {
 }
 
 ///|
-pub impl ToJson for Conversation with to_json(self : Conversation) -> Json {
-  Json::object(
-    Map(
-      [
-        ("model", Json::string(self.model.to_string())),
-        ("messages", ToJson::to_json(self.messages)),
-        ("stream", Json::boolean(false)),
-        ..if self.tools.length() > 0 {
-          [("tools", ToJson::to_json(self.tools))]
-        } else {
-          []
-        },
-        ..if self.json_response {
-          [
-            (
-              "response_format",
-              Json::object({ "type": Json::string("json_object") }),
-            ),
-          ]
-        } else {
-          []
-        },
-        ..match self.thinking {
-          Some(thinking) =>
-            [
-              (
-                "thinking",
-                Json::object({ "type": Json::string(thinking.to_string()) }),
-              ),
-            ]
-          None => []
-        },
-        ..match self.reasoning_effort {
-          Some(reasoning_effort) =>
-            [("reasoning_effort", Json::string(reasoning_effort.to_string()))]
-          None => []
-        },
-      ],
-    ),
-  )
-}
-
-///|
 fn Usage::from_json(json : Json) -> Usage {
   let fields = match json {
     Object(fields) => fields
@@ -136,48 +93,8 @@ fn Usage::empty() -> Usage {
 }
 
 ///|
-test "request body can request json output" {
-  let body = ToJson::to_json(
-    Conversation(
-      V4Flash,
-      [ChatMessage(System, "json only"), ChatMessage(User, "ping")],
-      json_response=true,
-    ),
-  )
-  let text = body.stringify()
-  assert_true(text.contains("\"response_format\""))
-  assert_true(text.contains("\"json_object\""))
-  guard body is Object(body_fields) else {
-    fail("request body is not an object")
-  }
-  guard body_fields.get("response_format") is Some(Object(format)) else {
-    fail("missing response_format")
-  }
-  guard format.get("type") is Some(String("json_object")) else {
-    fail("wrong response_format")
-  }
-}
-
-///|
-test "conversation encodes chat request body" {
-  let body = ToJson::to_json(
-    Conversation(V4Flash, [ChatMessage(User, "hello")], json_response=true),
-  )
-  let text = body.stringify()
-  assert_true(text.contains("\"model\":\"deepseek-v4-flash\""))
-  assert_true(text.contains("\"messages\""))
-  assert_true(text.contains("\"response_format\""))
-}
-
-///|
 test "tool messages include tool call id" {
-  let body = ToJson::to_json(
-    Conversation(
-      V4Pro,
-      [ChatMessage(Tool("call_123"), "tool result")],
-      json_response=false,
-    ),
-  )
+  let body = ToJson::to_json(ChatMessage(Tool("call_123"), "tool result"))
   let text = body.stringify()
   assert_true(text.contains("\"role\":\"tool\""))
   assert_true(text.contains("\"tool_call_id\":\"call_123\""))
@@ -195,11 +112,8 @@ test "tool definitions encode as native DeepSeek tools" {
     },
     strict=true,
   )
-  let body = ToJson::to_json(
-    Conversation(V4Pro, [ChatMessage(User, "weather")], tools=[tool]),
-  )
+  let body = ToJson::to_json(tool)
   let text = body.stringify()
-  assert_true(text.contains("\"tools\""))
   assert_true(text.contains("\"type\":\"function\""))
   assert_true(text.contains("\"name\":\"get_weather\""))
   assert_true(text.contains("\"strict\":true"))
@@ -232,60 +146,104 @@ test "assistant tool call messages encode tool_calls" {
 }
 
 ///|
-test "conversation encodes thinking controls" {
-  let body = ToJson::to_json(
-    Conversation(
-      V4Pro,
-      [ChatMessage(User, "solve")],
-      thinking=Some(Enabled),
-      reasoning_effort=Some(Max),
-    ),
-  )
-  let text = body.stringify()
-  assert_true(text.contains("\"thinking\""))
-  assert_true(text.contains("\"type\":\"enabled\""))
-  assert_true(text.contains("\"reasoning_effort\":\"max\""))
+fn[T] json_decode_error(
+  path : @json.JsonPath,
+  message : String,
+) -> T raise @json.JsonDecodeError {
+  raise JsonDecodeError((path, message))
 }
 
 ///|
-/// Decodes a DeepSeek chat completions JSON response body.
+pub impl FromJson for Usage with from_json(json : Json, _path : @json.JsonPath) -> Usage {
+  Usage::from_json(json)
+}
+
+///|
+pub impl FromJson for ToolCall with from_json(
+  json : Json,
+  path : @json.JsonPath,
+) -> ToolCall {
+  guard json is Object(fields) else {
+    json_decode_error(path, "ToolCall::from_json: expected object")
+  }
+  guard fields.get("id") is Some(String(id)) else {
+    json_decode_error(path.add_key("id"), "ToolCall::from_json: expected id")
+  }
+  guard fields.get("function") is Some(Object(function_fields)) else {
+    json_decode_error(
+      path.add_key("function"),
+      "ToolCall::from_json: expected function object",
+    )
+  }
+  guard function_fields.get("name") is Some(String(name)) else {
+    json_decode_error(
+      path.add_key("function").add_key("name"),
+      "ToolCall::from_json: expected function.name",
+    )
+  }
+  guard function_fields.get("arguments") is Some(String(arguments)) else {
+    json_decode_error(
+      path.add_key("function").add_key("arguments"),
+      "ToolCall::from_json: expected function.arguments",
+    )
+  }
+  ToolCall(id~, name~, arguments~)
+}
+
+///|
+/// Decodes a DeepSeek chat completions JSON response envelope.
 ///
 /// Missing usage information is represented as zero token counts.
-pub fn decode_chat_response(text : String) -> ChatResponse raise {
-  let parsed = @json.parse(text)
-  guard parsed is Object(parsed_fields) else {
-    fail("DeepSeek response is missing choices: \{text}")
+pub impl FromJson for ChatResponse with from_json(
+  json : Json,
+  path : @json.JsonPath,
+) -> ChatResponse {
+  guard json is Object(parsed_fields) else {
+    json_decode_error(path, "ChatResponse::from_json: expected response object")
   }
+  let choices_path = path.add_key("choices")
   guard parsed_fields.get("choices") is Some(Array(choices)) else {
-    fail("DeepSeek response is missing choices: \{text}")
+    json_decode_error(
+      choices_path, "ChatResponse::from_json: expected choices array",
+    )
   }
   guard choices.length() > 0 else {
-    fail("DeepSeek response has empty choices: \{text}")
+    json_decode_error(choices_path, "ChatResponse::from_json: empty choices")
   }
+  let choice_path = choices_path.add_index(0)
   guard choices[0] is Object(choice_fields) else {
-    fail("DeepSeek response choice is missing message: \{text}")
+    json_decode_error(
+      choice_path, "ChatResponse::from_json: expected choice object",
+    )
   }
-  guard choice_fields.get("message") is Some(message) else {
-    fail("DeepSeek response choice is missing message: \{text}")
+  let message_path = choice_path.add_key("message")
+  guard choice_fields.get("message") is Some(Object(message_fields)) else {
+    json_decode_error(
+      message_path, "ChatResponse::from_json: expected message object",
+    )
   }
-  guard message is Object(message_fields) else {
-    fail("DeepSeek response message is missing content: \{text}")
-  }
-  let tool_calls = decode_tool_calls(message_fields, text)
+  let tool_calls = decode_tool_calls(message_fields, message_path)
   let content = match message_fields.get("content") {
     Some(String(content)) => content
     Some(Null) => ""
     None if tool_calls.length() > 0 => ""
-    _ => fail("DeepSeek response message is missing content: \{text}")
+    _ =>
+      json_decode_error(
+        message_path.add_key("content"),
+        "ChatResponse::from_json: expected message content",
+      )
   }
   let reasoning_content = match message_fields.get("reasoning_content") {
     Some(String(reasoning_content)) => reasoning_content
     Some(Null) | None => ""
     _ =>
-      fail("DeepSeek response message has invalid reasoning_content: \{text}")
+      json_decode_error(
+        message_path.add_key("reasoning_content"),
+        "ChatResponse::from_json: expected reasoning_content string",
+      )
   }
   let usage = match parsed_fields.get("usage") {
-    Some(usage) => Usage::from_json(usage)
+    Some(usage) => FromJson::from_json(usage, path.add_key("usage"))
     None => Usage::empty()
   }
   { content, reasoning_content, tool_calls, usage }
@@ -294,46 +252,37 @@ pub fn decode_chat_response(text : String) -> ChatResponse raise {
 ///|
 fn decode_tool_calls(
   message_fields : Map[String, Json],
-  text : String,
-) -> Array[ToolCall] raise {
+  message_path : @json.JsonPath,
+) -> Array[ToolCall] raise @json.JsonDecodeError {
   match message_fields.get("tool_calls") {
     Some(Array(tool_calls)) => {
       let decoded : Array[ToolCall] = []
-      for tool_call in tool_calls {
-        decoded.push(ToolCall::from_json(tool_call, text))
+      for index, tool_call in tool_calls {
+        decoded.push(
+          FromJson::from_json(
+            tool_call,
+            message_path.add_key("tool_calls").add_index(index),
+          ),
+        )
       }
       decoded
     }
     Some(Null) | None => []
-    _ => fail("DeepSeek response message has invalid tool_calls: \{text}")
+    _ =>
+      json_decode_error(
+        message_path.add_key("tool_calls"),
+        "ChatResponse::from_json: expected tool_calls array",
+      )
   }
-}
-
-///|
-fn ToolCall::from_json(json : Json, text : String) -> ToolCall raise {
-  guard json is Object(fields) else {
-    fail("DeepSeek tool call is not an object: \{text}")
-  }
-  guard fields.get("id") is Some(String(id)) else {
-    fail("DeepSeek tool call is missing id: \{text}")
-  }
-  guard fields.get("function") is Some(Object(function_fields)) else {
-    fail("DeepSeek tool call is missing function: \{text}")
-  }
-  guard function_fields.get("name") is Some(String(name)) else {
-    fail("DeepSeek tool call is missing function.name: \{text}")
-  }
-  guard function_fields.get("arguments") is Some(String(arguments)) else {
-    fail("DeepSeek tool call is missing function.arguments: \{text}")
-  }
-  ToolCall(id~, name~, arguments~)
 }
 
 ///|
 test "parse chat response extracts content and usage" {
-  let response = decode_chat_response(
-    (
-      #|{"choices":[{"message":{"content":"{\"action\":\"finish\",\"args\":{\"answer\":\"ok\"}}"}}],"usage":{"prompt_tokens":10,"completion_tokens":4,"total_tokens":14,"prompt_cache_hit_tokens":7,"prompt_cache_miss_tokens":3}}
+  let response : ChatResponse = @json.from_json(
+    @json.parse(
+      (
+        #|{"choices":[{"message":{"content":"{\"action\":\"finish\",\"args\":{\"answer\":\"ok\"}}"}}],"usage":{"prompt_tokens":10,"completion_tokens":4,"total_tokens":14,"prompt_cache_hit_tokens":7,"prompt_cache_miss_tokens":3}}
+      ),
     ),
   )
   assert_eq(
@@ -350,9 +299,11 @@ test "parse chat response extracts content and usage" {
 
 ///|
 test "parse chat response extracts native tool calls" {
-  let response = decode_chat_response(
-    (
-      #|{"choices":[{"finish_reason":"tool_calls","message":{"content":null,"reasoning_content":"need current weather","role":"assistant","tool_calls":[{"id":"call_123","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\"Hangzhou\"}"}}]}}],"usage":{"total_tokens":20}}
+  let response : ChatResponse = @json.from_json(
+    @json.parse(
+      (
+        #|{"choices":[{"finish_reason":"tool_calls","message":{"content":null,"reasoning_content":"need current weather","role":"assistant","tool_calls":[{"id":"call_123","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\"Hangzhou\"}"}}]}}],"usage":{"total_tokens":20}}
+      ),
     ),
   )
   assert_eq(response.content, "")

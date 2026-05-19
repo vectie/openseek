@@ -103,32 +103,6 @@ pub fn ChatMessage::ChatMessage(
 }
 
 ///|
-/// A complete DeepSeek chat request conversation.
-///
-/// `json_response=true` requests a JSON object response format.
-pub struct Conversation {
-  model : Model
-  messages : Array[ChatMessage]
-  json_response : Bool
-  tools : Array[ToolDefinition]
-  thinking : ThinkingMode?
-  reasoning_effort : ReasoningEffort?
-} derive(Debug)
-
-///|
-/// Constructs a typed DeepSeek chat request conversation.
-pub fn Conversation::Conversation(
-  model : Model,
-  messages : Array[ChatMessage],
-  json_response? : Bool = false,
-  tools? : Array[ToolDefinition] = [],
-  thinking? : ThinkingMode? = None,
-  reasoning_effort? : ReasoningEffort? = None,
-) -> Conversation {
-  { model, messages, json_response, tools, thinking, reasoning_effort }
-}
-
-///|
 /// Token usage reported by DeepSeek chat responses.
 pub struct Usage {
   prompt_tokens : Int
