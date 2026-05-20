@@ -3,7 +3,7 @@
 ///
 /// Assistant messages whose `content` is empty but carry tool calls are
 /// encoded with JSON `content: null`, as the API requires.
-fn encode_chat_message(message : ChatMessage) -> Json {
+impl ToJson for ChatMessage with to_json(message : ChatMessage) -> Json {
   let content = match message.role {
     Assistant if message.tool_calls.length() > 0 && message.content == "" =>
       Json::null()
@@ -22,11 +22,7 @@ fn encode_chat_message(message : ChatMessage) -> Json {
           [
             (
               "tool_calls",
-              Json::array(
-                [
-                  for call in message.tool_calls => encode_tool_call(call)
-                ],
-              ),
+              Json::array([ for call in message.tool_calls => call.to_json() ]),
             ),
           ]
         } else {
@@ -44,37 +40,32 @@ fn encode_chat_message(message : ChatMessage) -> Json {
 
 ///|
 /// Encodes a `ToolDefinition` as a DeepSeek `tools[]` entry.
-fn encode_tool_definition(tool : ToolDefinition) -> Json {
-  Json::object({
-    "type": Json::string("function"),
-    "function": Json::object(
-      Map(
-        [
-          ("name", Json::string(tool.name)),
-          ("description", Json::string(tool.description)),
-          ("parameters", tool.parameters),
-          ..if tool.strict {
-            [("strict", Json::boolean(true))]
-          } else {
-            []
-          },
-        ],
-      ),
-    ),
-  })
+impl ToJson for ToolDefinition with to_json(tool : ToolDefinition) -> Json {
+  let function : Json = if tool.strict {
+    {
+      "name": tool.name,
+      "description": tool.description,
+      "parameters": tool.parameters,
+      "strict": true,
+    }
+  } else {
+    {
+      "name": tool.name,
+      "description": tool.description,
+      "parameters": tool.parameters,
+    }
+  }
+  { "type": "function", "function": function }
 }
 
 ///|
 /// Encodes a `ToolCall` as the DeepSeek assistant `tool_calls[]` entry.
-fn encode_tool_call(call : ToolCall) -> Json {
-  Json::object({
-    "id": Json::string(call.id),
-    "type": Json::string("function"),
-    "function": Json::object({
-      "name": Json::string(call.name),
-      "arguments": Json::string(call.arguments),
-    }),
-  })
+impl ToJson for ToolCall with to_json(call : ToolCall) -> Json {
+  {
+    "id": call.id,
+    "type": "function",
+    "function": { "name": call.name, "arguments": call.arguments },
+  }
 }
 
 ///|
@@ -95,35 +86,18 @@ pub fn encode_chat_request(
         ("model", Json::string(model.to_string())),
         (
           "messages",
-          Json::array(
-            [
-              for message in messages => encode_chat_message(message)
-            ],
-          ),
+          Json::array([ for message in messages => message.to_json() ]),
         ),
         ("stream", Json::boolean(false)),
-        (
-          "response_format",
-          Json::object({ "type": Json::string("json_object") }),
-        ),
+        ("response_format", { "type": "json_object" }),
         ..if tools.length() > 0 {
-          [
-            (
-              "tools",
-              Json::array([ for tool in tools => encode_tool_definition(tool) ]),
-            ),
-          ]
+          [("tools", Json::array([ for tool in tools => tool.to_json() ]))]
         } else {
           []
         },
         ..match thinking {
           Some(thinking) =>
-            [
-              (
-                "thinking",
-                Json::object({ "type": Json::string(thinking.to_string()) }),
-              ),
-            ]
+            [("thinking", Json::object({ "type": thinking.to_string() }))]
           None => []
         },
         ..match reasoning_effort {
@@ -175,9 +149,7 @@ fn Usage::empty() -> Usage {
 
 ///|
 test "tool messages include tool call id" {
-  let body = encode_chat_message(
-    ChatMessage(Tool("call_123"), content="tool result"),
-  )
+  let body = ChatMessage(Tool("call_123"), content="tool result").to_json()
   let text = body.stringify()
   assert_true(text.contains("\"role\":\"tool\""))
   assert_true(text.contains("\"tool_call_id\":\"call_123\""))
@@ -195,8 +167,7 @@ test "tool definitions encode as native DeepSeek tools" {
     },
     strict=true,
   )
-  let body = encode_tool_definition(tool)
-  let text = body.stringify()
+  let text = tool.to_json().stringify()
   assert_true(text.contains("\"type\":\"function\""))
   assert_true(text.contains("\"name\":\"get_weather\""))
   assert_true(text.contains("\"strict\":true"))
@@ -204,20 +175,18 @@ test "tool definitions encode as native DeepSeek tools" {
 
 ///|
 test "assistant tool call messages encode tool_calls" {
-  let body = encode_chat_message(
-    ChatMessage(
-      Assistant,
-      content="",
-      tool_calls=[
-        ToolCall(
-          id="call_123",
-          name="get_weather",
-          arguments="{\"location\":\"Hangzhou\"}",
-        ),
-      ],
-      reasoning_content="checked available tools",
-    ),
-  )
+  let body = ChatMessage(
+    Assistant,
+    content="",
+    tool_calls=[
+      ToolCall(
+        id="call_123",
+        name="get_weather",
+        arguments="{\"location\":\"Hangzhou\"}",
+      ),
+    ],
+    reasoning_content="checked available tools",
+  ).to_json()
   let text = body.stringify()
   assert_true(text.contains("\"role\":\"assistant\""))
   assert_true(text.contains("\"content\":null"))
@@ -230,15 +199,13 @@ test "assistant tool call messages encode tool_calls" {
 
 ///|
 test "assistant tool call messages preserve content when present" {
-  let body = encode_chat_message(
-    ChatMessage(Assistant, content="I will check that now.", tool_calls=[
-      ToolCall(
-        id="call_123",
-        name="get_weather",
-        arguments="{\"location\":\"Hangzhou\"}",
-      ),
-    ]),
-  )
+  let body = ChatMessage(Assistant, content="I will check that now.", tool_calls=[
+    ToolCall(
+      id="call_123",
+      name="get_weather",
+      arguments="{\"location\":\"Hangzhou\"}",
+    ),
+  ]).to_json()
   let text = body.stringify()
   assert_true(text.contains("\"content\":\"I will check that now.\""))
   assert_true(text.contains("\"tool_calls\""))
@@ -251,10 +218,9 @@ test "tool call arguments pass through as opaque strings" {
     name="write",
     arguments="not even valid json{",
   )
-  let body = encode_chat_message(
-    ChatMessage(Assistant, content="", tool_calls=[call]),
-  )
-  let text = body.stringify()
+  let text = ChatMessage(Assistant, content="", tool_calls=[call])
+    .to_json()
+    .stringify()
   assert_true(text.contains("\"arguments\":\"not even valid json{\""))
 }
 
