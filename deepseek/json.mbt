@@ -3,7 +3,7 @@
 ///
 /// Assistant messages whose `content` is empty but carry tool calls are
 /// encoded with JSON `content: null`, as the API requires.
-pub fn encode_chat_message(message : ChatMessage) -> Json {
+fn encode_chat_message(message : ChatMessage) -> Json {
   let content = match message.role {
     Assistant if message.tool_calls.length() > 0 && message.content == "" =>
       Json::null()
@@ -33,7 +33,7 @@ pub fn encode_chat_message(message : ChatMessage) -> Json {
 
 ///|
 /// Encodes a `ToolDefinition` as a DeepSeek `tools[]` entry.
-pub fn encode_tool_definition(tool : ToolDefinition) -> Json {
+fn encode_tool_definition(tool : ToolDefinition) -> Json {
   let function_fields : Map[String, Json] = {
     "name": Json::string(tool.name),
     "description": Json::string(tool.description),
@@ -50,7 +50,7 @@ pub fn encode_tool_definition(tool : ToolDefinition) -> Json {
 
 ///|
 /// Encodes a `ToolCall` as the DeepSeek assistant `tool_calls[]` entry.
-pub fn encode_tool_call(call : ToolCall) -> Json {
+fn encode_tool_call(call : ToolCall) -> Json {
   Json::object({
     "id": Json::string(call.id),
     "type": Json::string("function"),
@@ -219,6 +219,20 @@ test "assistant tool call messages preserve content when present" {
 }
 
 ///|
+test "tool call arguments pass through as opaque strings" {
+  let call = ToolCall(
+    id="call_1",
+    name="write",
+    arguments="not even valid json{",
+  )
+  let body = encode_chat_message(
+    ChatMessage(Assistant, content="", tool_calls=[call]),
+  )
+  let text = body.stringify()
+  assert_true(text.contains("\"arguments\":\"not even valid json{\""))
+}
+
+///|
 fn[T] json_decode_error(
   path : @json.JsonPath,
   message : String,
@@ -227,15 +241,12 @@ fn[T] json_decode_error(
 }
 
 ///|
-pub impl FromJson for Usage with from_json(json : Json, _path : @json.JsonPath) -> Usage {
+impl FromJson for Usage with from_json(json : Json, _path : @json.JsonPath) -> Usage {
   Usage::from_json(json)
 }
 
 ///|
-pub impl FromJson for ToolCall with from_json(
-  json : Json,
-  path : @json.JsonPath,
-) -> ToolCall {
+impl FromJson for ToolCall with from_json(json : Json, path : @json.JsonPath) -> ToolCall {
   match json {
     {
       "id": String(id),

@@ -29,43 +29,6 @@ test "chat message constructor keeps labeled fields" {
 }
 
 ///|
-test "native tool definition encoding" {
-  let tool = @deepseek.ToolDefinition("shell", "Run a shell command.", {
-    "type": "object",
-    "properties": { "cmd": { "type": "string" } },
-    "required": ["cmd"],
-  })
-  let body = @deepseek.encode_tool_definition(tool)
-  let text = body.stringify()
-  assert_true(text.contains("\"type\":\"function\""))
-  assert_true(text.contains("\"name\":\"shell\""))
-  assert_true(text.contains("\"required\""))
-}
-
-///|
-test "assistant tool call roundtrip message encoding" {
-  let call = @deepseek.ToolCall(
-    id="call_123",
-    name="shell",
-    arguments="{\"cmd\":\"moon test\"}",
-  )
-  let message = @deepseek.ChatMessage(
-    Assistant,
-    content="",
-    tool_calls=[call],
-    reasoning_content="run tests first",
-  )
-  let text = @deepseek.encode_chat_message(message).stringify()
-  assert_true(text.contains("\"role\":\"assistant\""))
-  assert_true(text.contains("\"content\":null"))
-  assert_true(text.contains("\"tool_calls\""))
-  assert_true(text.contains("\"reasoning_content\":\"run tests first\""))
-  assert_true(
-    text.contains("\"arguments\":\"{\\\"cmd\\\":\\\"moon test\\\"}\""),
-  )
-}
-
-///|
 test "model parsing" {
   assert_eq(
     @deepseek.Model::parse("deepseek-v4-flash").to_string(),

@@ -84,20 +84,6 @@ test "encode_chat_request rounds-trips assistant tool call echo and tool result"
 }
 
 ///|
-test "encode_chat_message preserves tool arguments as opaque JSON string" {
-  let call = @deepseek.ToolCall(
-    id="call_1",
-    name="write",
-    arguments="not even valid json{",
-  )
-  let body = @deepseek.encode_chat_message(
-    ChatMessage(Assistant, content="", tool_calls=[call]),
-  )
-  let text = body.stringify()
-  assert_true(text.contains("\"arguments\":\"not even valid json{\""))
-}
-
-///|
 test "encode_chat_request encodes multiple tool definitions" {
   let shell = @deepseek.ToolDefinition("shell", "Run a shell command.", {
     "type": "object",

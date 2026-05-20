@@ -18,9 +18,9 @@ The HTTP client lives in `bobzhang/openseek/deepseek/client`.
   chat message constructor. Use `Assistant` with `tool_calls` for the assistant
   message that must be sent back after DeepSeek requests native tool calls.
 - `encode_chat_request(model, messages, tools?, thinking?, reasoning_effort?)`:
-  builds the full DeepSeek chat completions request body. `encode_chat_message`,
-  `encode_tool_definition`, and `encode_tool_call` expose the per-value
-  encoders for fixtures and tests.
+  builds the full DeepSeek chat completions request body. The per-value
+  encoders for messages, tool definitions, and tool calls are package-private
+  implementation details.
 - `ToolDefinition(name, description, parameters, strict?)`: a native DeepSeek
   function tool definition with a JSON Schema parameters object.
 - `ToolCall(id~, name~, arguments~)`: a decoded function call request from the
@@ -59,42 +59,41 @@ The usual sequence is:
 
 ```moonbit check
 ///|
-test "encode chat message values" {
+test "encode chat request values" {
   let message = @deepseek.ChatMessage(User, content="write a MoonBit test")
   let model : @deepseek.Model = V4Flash
   inspect(model, content="deepseek-v4-flash")
   inspect(message.role, content="user")
   assert_eq(message.content, "write a MoonBit test")
-  assert_true(
-    @deepseek.encode_chat_message(message)
-    .stringify()
-    .contains("\"role\":\"user\""),
-  )
+  let body = @deepseek.encode_chat_request(model, [message]).stringify()
+  assert_true(body.contains("\"role\":\"user\""))
+  assert_true(body.contains("\"model\":\"deepseek-v4-flash\""))
 }
 ```
 
 ```moonbit check
 ///|
-test "encode native tool call values" {
+test "encode tool-enabled chat request" {
   let tool = @deepseek.ToolDefinition("read", "Read a file.", {
     "type": "object",
     "properties": { "path": { "type": "string" } },
     "required": ["path"],
   })
-  let body = @deepseek.encode_tool_definition(tool).stringify()
-  assert_true(body.contains("\"type\":\"function\""))
-
   let call = @deepseek.ToolCall(
     id="call_1",
     name="read",
     arguments="{\"path\":\"README.mbt.md\"}",
   )
-  let message = @deepseek.ChatMessage(Assistant, content="", tool_calls=[call])
-  assert_true(
-    @deepseek.encode_chat_message(message)
-    .stringify()
-    .contains("\"tool_calls\""),
-  )
+  let body = @deepseek.encode_chat_request(
+    V4Flash,
+    [
+      ChatMessage(User, content="read README.mbt.md"),
+      ChatMessage(Assistant, content="", tool_calls=[call]),
+    ],
+    tools=[tool],
+  ).stringify()
+  assert_true(body.contains("\"type\":\"function\""))
+  assert_true(body.contains("\"tool_calls\""))
 }
 ```
 

@@ -7,13 +7,7 @@ import {
 }
 
 // Values
-pub fn encode_chat_message(ChatMessage) -> Json
-
 pub fn encode_chat_request(Model, Array[ChatMessage], tools? : Array[ToolDefinition], thinking? : ThinkingMode, reasoning_effort? : ReasoningEffort) -> Json
-
-pub fn encode_tool_call(ToolCall) -> Json
-
-pub fn encode_tool_definition(ToolDefinition) -> Json
 
 // Errors
 
@@ -67,7 +61,6 @@ pub struct ToolCall {
   arguments : String
 } derive(@debug.Debug)
 pub fn ToolCall::ToolCall(id~ : String, name~ : String, arguments~ : String) -> Self
-pub impl @json.FromJson for ToolCall
 
 pub struct ToolDefinition {
   name : String
@@ -84,7 +77,6 @@ pub struct Usage {
   prompt_cache_hit_tokens : Int
   prompt_cache_miss_tokens : Int
 } derive(@debug.Debug)
-pub impl @json.FromJson for Usage
 
 // Type aliases
 

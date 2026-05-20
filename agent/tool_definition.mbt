@@ -98,15 +98,16 @@ fn string_schema() -> Json {
 test "function tools include json schemas" {
   let tools = function_tools()
   assert_eq(tools.length(), 4)
-  let text = Json::array(
-    [
-      for t in tools => @deepseek.encode_tool_definition(t)
-    ],
-  ).stringify()
-  assert_true(text.contains("\"type\":\"function\""))
-  assert_true(text.contains("\"name\":\"shell\""))
-  assert_true(text.contains("\"required\""))
-  assert_true(text.contains("\"cmd\""))
+  let names = [ for t in tools => t.name ]
+  assert_true(names.contains("shell"))
+  assert_true(names.contains("read"))
+  assert_true(names.contains("write"))
+  assert_true(names.contains("finish"))
+  for t in tools {
+    let params = t.parameters.stringify()
+    assert_true(params.contains("\"properties\""))
+    assert_true(params.contains("\"required\""))
+  }
 }
 
 ///|
