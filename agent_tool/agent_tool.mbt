@@ -30,12 +30,25 @@ pub fn AgentToolCall::AgentToolCall(
 
 ///|
 /// A locally registered tool: the name and JSON Schema sent to DeepSeek, plus a
-/// callable executor that runs when DeepSeek requests this tool.
-pub(all) struct AgentToolDefinition {
+/// callable executor that runs when DeepSeek requests this tool. Construct via
+/// `AgentToolDefinition(name, description, schema, execute)`.
+pub struct AgentToolDefinition {
   name : String
   description : String
   schema : Json
   execute : ToolExecutor
+}
+
+///|
+/// Builds a tool definition with a name, JSON Schema for the arguments, and
+/// the executor the framework invokes when DeepSeek requests this tool.
+pub fn AgentToolDefinition::AgentToolDefinition(
+  name : String,
+  description : String,
+  schema : Json,
+  execute : ToolExecutor,
+) -> AgentToolDefinition {
+  { name, description, schema, execute }
 }
 
 ///|
@@ -227,4 +240,85 @@ async test "execute_tool_call dispatches to registered executor" {
   let result = execute_tool_call(call, tools)
   guard result is Continue(output) else { fail("expected Continue") }
   assert_eq(output, "hi")
+}
+
+///|
+async fn async_echo(args : Json) -> ToolResult {
+  match args {
+    { "value": String(v), .. } => Continue(v)
+    _ => Continue("no value")
+  }
+}
+
+///|
+async test "execute_tool_call dispatches to async executor" {
+  let tools = Tools([
+    {
+      name: "echo",
+      description: "Async echo.",
+      schema: { "type": "object" },
+      execute: Async(async_echo),
+    },
+  ])
+  let call = AgentToolCall(
+    ToolCall(id="call_1", name="echo", arguments="{\"value\":\"async-hi\"}"),
+  )
+  let result = execute_tool_call(call, tools)
+  guard result is Continue(output) else { fail("expected Continue") }
+  assert_eq(output, "async-hi")
+}
+
+///|
+test "Tools::function_tools preserves description and schema" {
+  let tools = Tools([
+    {
+      name: "echo",
+      description: "Echo what comes in.",
+      schema: { "type": "object", "properties": {} },
+      execute: Sync(_args => Continue("ok")),
+    },
+  ])
+  let function_tools = tools.function_tools()
+  assert_eq(function_tools[0].name, "echo")
+  assert_eq(function_tools[0].description, "Echo what comes in.")
+  let text = function_tools[0].parameters.stringify()
+  assert_true(text.contains("\"type\":\"object\""))
+  assert_true(text.contains("\"properties\""))
+}
+
+///|
+test "Tools::Tools accepts an empty registry" {
+  let tools = Tools([])
+  assert_eq(tools.function_tools().length(), 0)
+  assert_true(tools.find("anything") is None)
+}
+
+///|
+test "Tools::function_tools yields one entry per definition" {
+  let tools = Tools([
+    {
+      name: "first",
+      description: "First.",
+      schema: { "type": "object" },
+      execute: Sync(_args => Continue("1")),
+    },
+    {
+      name: "second",
+      description: "Second.",
+      schema: { "type": "object" },
+      execute: Sync(_args => Continue("2")),
+    },
+    {
+      name: "third",
+      description: "Third.",
+      schema: { "type": "object" },
+      execute: Sync(_args => Continue("3")),
+    },
+  ])
+  let function_tools = tools.function_tools()
+  assert_eq(function_tools.length(), 3)
+  let names = [ for t in function_tools => t.name ]
+  assert_true(names.contains("first"))
+  assert_true(names.contains("second"))
+  assert_true(names.contains("third"))
 }

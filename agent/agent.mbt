@@ -14,7 +14,7 @@ pub async fn run(
     thinking=Some(Enabled),
     reasoning_effort=Some(Max),
   )
-  let tools = @agent_tool.Tools(tool_definitions()) catch {
+  let tools = tool_definitions() catch {
     error => {
       println("agent setup failed: \{error}")
       return

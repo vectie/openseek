@@ -17,12 +17,13 @@ pub struct AgentToolCall {
 }
 pub fn AgentToolCall::AgentToolCall(@deepseek.ToolCall) -> Self raise
 
-pub(all) struct AgentToolDefinition {
+pub struct AgentToolDefinition {
   name : String
   description : String
   schema : Json
   execute : ToolExecutor
 }
+pub fn AgentToolDefinition::AgentToolDefinition(String, String, Json, ToolExecutor) -> Self
 
 pub(all) enum ToolExecutor {
   Async(async (Json) -> ToolResult)
