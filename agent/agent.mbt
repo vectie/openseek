@@ -55,13 +55,16 @@ pub async fn run(
         }
       }
       let result = @agent_tool.execute_tool_call(tool_call, tool_definitions())
-      if result.finished {
-        println("=== finished ===")
-        println(result.output)
-        return
+      let output = match result {
+        Finish(answer) => {
+          println("=== finished ===")
+          println(answer)
+          return
+        }
+        Continue(output) => output
       }
-      println("tool: \{result.output}")
-      messages.push(ChatMessage(Tool(native_call.id), content=result.output))
+      println("tool: \{output}")
+      messages.push(ChatMessage(Tool(native_call.id), content=output))
     }
   }
   println("=== max steps exhausted ===")

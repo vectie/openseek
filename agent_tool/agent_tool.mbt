@@ -58,18 +58,16 @@ pub async fn ToolExecutor::run(
 }
 
 ///|
-/// The output of a tool execution. `finished` is `true` when the tool signals
-/// the agent loop should stop and return `output` as the final answer.
-pub(all) struct ToolResult {
-  output : String
-  finished : Bool
-}
-
-///|
-/// Constructs a `ToolResult` that lets the agent loop continue with `output` as
-/// the tool's reply message.
-pub fn continue_result(output : String) -> ToolResult {
-  { output, finished: false }
+/// The outcome of running a tool. The agent loop branches on this:
+///
+/// - `Continue(message)` — append `message` as a `Tool(id)` chat message and
+///   keep looping. This is also the variant used for tool-reported errors;
+///   the model sees the error text and decides what to do next.
+/// - `Finish(answer)` — stop the loop and treat `answer` as the final result
+///   to surface to the user.
+pub(all) enum ToolResult {
+  Continue(String)
+  Finish(String)
 }
 
 ///|
@@ -108,7 +106,7 @@ pub async fn execute_tool_call(
 ) -> ToolResult {
   match find_tool(registry, call.name) {
     Some(tool) => tool.execute.run(call.arguments)
-    None => continue_result("error: unknown tool \{call.name}")
+    None => Continue("error: unknown tool \{call.name}")
   }
 }
 
@@ -142,7 +140,7 @@ test "function_tools converts agent registry to deepseek tool definitions" {
       name: "echo",
       description: "Echo the input.",
       schema: { "type": "object" },
-      execute: Sync(_args => continue_result("ok")),
+      execute: Sync(_args => Continue("ok")),
     },
   ]
   let tools = function_tools(registry)
@@ -154,8 +152,10 @@ test "function_tools converts agent registry to deepseek tool definitions" {
 async test "execute_tool_call reports unknown tool" {
   let call = AgentToolCall(ToolCall(id="call_1", name="ghost", arguments="{}"))
   let result = execute_tool_call(call, [])
-  assert_eq(result.output, "error: unknown tool ghost")
-  assert_false(result.finished)
+  guard result is Continue(output) else {
+    fail("unknown tool should produce Continue")
+  }
+  assert_eq(output, "error: unknown tool ghost")
 }
 
 ///|
@@ -167,8 +167,8 @@ async test "execute_tool_call dispatches to registered executor" {
       schema: { "type": "object" },
       execute: Sync(args => {
         match args {
-          { "value": String(v), .. } => continue_result(v)
-          _ => continue_result("no value")
+          { "value": String(v), .. } => Continue(v)
+          _ => Continue("no value")
         }
       }),
     },
@@ -177,5 +177,6 @@ async test "execute_tool_call dispatches to registered executor" {
     ToolCall(id="call_1", name="echo", arguments="{\"value\":\"hi\"}"),
   )
   let result = execute_tool_call(call, registry)
-  assert_eq(result.output, "hi")
+  guard result is Continue(output) else { fail("expected Continue") }
+  assert_eq(output, "hi")
 }

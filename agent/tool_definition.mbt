@@ -81,6 +81,6 @@ test "tool definitions are executable registry entries" {
     fail("finish should use a synchronous executor")
   }
   let result = execute({ "answer": "done" })
-  assert_eq(result.output, "done")
-  assert_true(result.finished)
+  guard result is Finish(answer) else { fail("finish should produce Finish") }
+  assert_eq(answer, "done")
 }
