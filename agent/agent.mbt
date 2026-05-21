@@ -20,7 +20,10 @@ pub async fn run(
   ]
   for step in 0..<max_steps {
     println("--- step \{step + 1} ---")
-    let response = client.chat(messages, tools=function_tools())
+    let response = client.chat(
+      messages,
+      tools=@agent_tool.function_tools(tool_definitions()),
+    )
     if response.content != "" {
       println("agent: \{response.content}")
     }
@@ -42,7 +45,7 @@ pub async fn run(
     )
     messages.push(assistant_message)
     for native_call in response.tool_calls {
-      let tool_call = AgentToolCall(native_call) catch {
+      let tool_call = @agent_tool.AgentToolCall(native_call) catch {
         error => {
           println("tool: error: \{error}")
           messages.push(
@@ -51,7 +54,7 @@ pub async fn run(
           continue
         }
       }
-      let result = execute_tool_call(tool_call)
+      let result = @agent_tool.execute_tool_call(tool_call, tool_definitions())
       if result.finished {
         println("=== finished ===")
         println(result.output)

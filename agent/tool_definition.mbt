@@ -1,46 +1,8 @@
 ///|
-priv struct AgentToolDefinition {
-  name : String
-  description : String
-  schema : Json
-  execute : ToolExecutor
-}
-
-///|
-priv enum ToolExecutor {
-  Async(async (Json) -> ToolResult)
-  Sync((Json) -> ToolResult)
-}
-
-///|
-async fn ToolExecutor::run(self : ToolExecutor, arguments : Json) -> ToolResult {
-  match self {
-    Async(execute) => execute(arguments)
-    Sync(execute) => execute(arguments)
-  }
-}
-
-///|
-fn function_tools() -> Array[@deepseek.ToolDefinition] {
-  [
-    for tool in tool_definitions() => {
-      ToolDefinition(tool.name, tool.description, tool.schema)
-    }
-  ]
-}
-
-///|
-fn find_tool(name : String) -> AgentToolDefinition? {
-  for tool in tool_definitions() {
-    if tool.name == name {
-      return Some(tool)
-    }
-  }
-  None
-}
-
-///|
-fn tool_definitions() -> Array[AgentToolDefinition] {
+/// The agent's local tool registry: the four functions the agent advertises to
+/// DeepSeek (`shell`, `read`, `write`, `finish`) along with their JSON schemas
+/// and executors.
+fn tool_definitions() -> Array[@agent_tool.AgentToolDefinition] {
   [
     {
       name: "shell",
@@ -96,7 +58,7 @@ fn string_schema() -> Json {
 
 ///|
 test "function tools include json schemas" {
-  let tools = function_tools()
+  let tools = @agent_tool.function_tools(tool_definitions())
   assert_eq(tools.length(), 4)
   let names = [ for t in tools => t.name ]
   assert_true(names.contains("shell"))
@@ -112,7 +74,9 @@ test "function tools include json schemas" {
 
 ///|
 test "tool definitions are executable registry entries" {
-  guard find_tool("finish") is Some(tool) else { fail("missing finish tool") }
+  guard @agent_tool.find_tool(tool_definitions(), "finish") is Some(tool) else {
+    fail("missing finish tool")
+  }
   guard tool.execute is Sync(execute) else {
     fail("finish should use a synchronous executor")
   }

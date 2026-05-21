@@ -1,0 +1,47 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/agent_tool"
+
+import {
+  "bobzhang/openseek/deepseek",
+}
+
+// Values
+pub fn continue_result(String) -> ToolResult
+
+pub async fn execute_tool_call(AgentToolCall, Array[AgentToolDefinition]) -> ToolResult
+
+pub fn find_tool(Array[AgentToolDefinition], String) -> AgentToolDefinition?
+
+pub fn function_tools(Array[AgentToolDefinition]) -> Array[@deepseek.ToolDefinition]
+
+// Errors
+
+// Types and methods
+pub struct AgentToolCall {
+  name : String
+  arguments : Json
+}
+pub fn AgentToolCall::AgentToolCall(@deepseek.ToolCall) -> Self raise
+
+pub(all) struct AgentToolDefinition {
+  name : String
+  description : String
+  schema : Json
+  execute : ToolExecutor
+}
+
+pub(all) enum ToolExecutor {
+  Async(async (Json) -> ToolResult)
+  Sync((Json) -> ToolResult)
+}
+pub async fn ToolExecutor::run(Self, Json) -> ToolResult
+
+pub(all) struct ToolResult {
+  output : String
+  finished : Bool
+}
+
+// Type aliases
+
+// Traits
+
