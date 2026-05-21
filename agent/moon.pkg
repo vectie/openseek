@@ -1,9 +1,11 @@
 import {
   "bobzhang/openseek/agent_tool",
+  "bobzhang/openseek/agent_tool/finish",
+  "bobzhang/openseek/agent_tool/read",
+  "bobzhang/openseek/agent_tool/shell",
+  "bobzhang/openseek/agent_tool/write",
   "bobzhang/openseek/deepseek",
   "bobzhang/openseek/deepseek/client",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/process",
   "moonbitlang/core/json",
 }
 

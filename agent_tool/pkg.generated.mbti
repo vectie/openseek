@@ -20,10 +20,12 @@ pub fn AgentToolCall::AgentToolCall(@deepseek.ToolCall) -> Self raise
 pub struct AgentToolDefinition {
   name : String
   description : String
-  schema : Json
+  schema : JsonSchema
   execute : ToolExecutor
 }
-pub fn AgentToolDefinition::AgentToolDefinition(String, String, Json, ToolExecutor) -> Self
+pub fn AgentToolDefinition::AgentToolDefinition(String, String, JsonSchema, ToolExecutor) -> Self
+
+pub(all) struct JsonSchema(Json)
 
 pub(all) enum ToolExecutor {
   Async(async (Json) -> ToolResult)
