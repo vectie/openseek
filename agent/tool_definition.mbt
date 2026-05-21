@@ -7,49 +7,50 @@ fn tool_definitions() -> @agent_tool.Tools raise {
     AgentToolDefinition(
       "shell",
       "Run arguments.cmd through sh -c, optionally in arguments.cwd, and return exit code plus output.",
-      object_schema({ "cmd": string_schema(), "cwd": string_schema() }, ["cmd"]),
+      JsonSchema({
+        "type": "object",
+        "properties": {
+          "cmd": { "type": "string" },
+          "cwd": { "type": "string" },
+        },
+        "required": ["cmd"],
+      }),
       Async(execute_shell),
     ),
     AgentToolDefinition(
       "read",
       "Read arguments.path as text.",
-      object_schema({ "path": string_schema() }, ["path"]),
+      JsonSchema({
+        "type": "object",
+        "properties": { "path": { "type": "string" } },
+        "required": ["path"],
+      }),
       Async(execute_read),
     ),
     AgentToolDefinition(
       "write",
       "Overwrite arguments.path with arguments.content.",
-      object_schema({ "path": string_schema(), "content": string_schema() }, [
-        "path", "content",
-      ]),
+      JsonSchema({
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "content": { "type": "string" },
+        },
+        "required": ["path", "content"],
+      }),
       Async(execute_write),
     ),
     AgentToolDefinition(
       "finish",
       "End the task with arguments.answer.",
-      object_schema({ "answer": string_schema() }, ["answer"]),
+      JsonSchema({
+        "type": "object",
+        "properties": { "answer": { "type": "string" } },
+        "required": ["answer"],
+      }),
       Sync(execute_finish),
     ),
   ])
-}
-
-///|
-fn object_schema(
-  properties : Map[String, Json],
-  required : Array[String],
-) -> Json {
-  {
-    "type": "object",
-    "properties": Json::object(properties),
-    "required": [
-      for name in required => name
-    ],
-  }
-}
-
-///|
-fn string_schema() -> Json {
-  { "type": "string" }
 }
 
 ///|

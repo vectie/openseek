@@ -29,13 +29,18 @@ pub fn AgentToolCall::AgentToolCall(
 }
 
 ///|
+/// A JSON Schema describing the arguments a tool accepts. Wraps a raw `Json`
+/// value so registry entries advertise schemas explicitly.
+pub(all) struct JsonSchema(Json)
+
+///|
 /// A locally registered tool: the name and JSON Schema sent to DeepSeek, plus a
 /// callable executor that runs when DeepSeek requests this tool. Construct via
 /// `AgentToolDefinition(name, description, schema, execute)`.
 pub struct AgentToolDefinition {
   name : String
   description : String
-  schema : Json
+  schema : JsonSchema
   execute : ToolExecutor
 }
 
@@ -45,7 +50,7 @@ pub struct AgentToolDefinition {
 pub fn AgentToolDefinition::AgentToolDefinition(
   name : String,
   description : String,
-  schema : Json,
+  schema : JsonSchema,
   execute : ToolExecutor,
 ) -> AgentToolDefinition {
   { name, description, schema, execute }
@@ -114,7 +119,8 @@ pub fn Tools::find(self : Tools, name : String) -> AgentToolDefinition? {
 pub fn Tools::function_tools(self : Tools) -> Array[@deepseek.ToolDefinition] {
   [
     for definition in self.by_name.values() => {
-      ToolDefinition(definition.name, definition.description, definition.schema)
+      let JsonSchema(schema) = definition.schema
+      ToolDefinition(definition.name, definition.description, schema)
     }
   ]
 }
@@ -161,7 +167,7 @@ test "Tools::function_tools converts the registry to deepseek tool definitions" 
     {
       name: "echo",
       description: "Echo the input.",
-      schema: { "type": "object" },
+      schema: JsonSchema({ "type": "object" }),
       execute: Sync(_args => Continue("ok")),
     },
   ])
@@ -176,7 +182,7 @@ test "Tools::find returns the registered definition by name" {
     {
       name: "echo",
       description: "Echo.",
-      schema: { "type": "object" },
+      schema: JsonSchema({ "type": "object" }),
       execute: Sync(_args => Continue("ok")),
     },
   ])
@@ -191,13 +197,13 @@ test "Tools::Tools raises on duplicate tool names" {
     {
       name: "echo",
       description: "First.",
-      schema: { "type": "object" },
+      schema: JsonSchema({ "type": "object" }),
       execute: Sync(_args => Continue("first")),
     },
     {
       name: "echo",
       description: "Second.",
-      schema: { "type": "object" },
+      schema: JsonSchema({ "type": "object" }),
       execute: Sync(_args => Continue("second")),
     },
   ]) catch {
@@ -225,7 +231,7 @@ async test "execute_tool_call dispatches to registered executor" {
     {
       name: "echo",
       description: "Echo.",
-      schema: { "type": "object" },
+      schema: JsonSchema({ "type": "object" }),
       execute: Sync(args => {
         match args {
           { "value": String(v), .. } => Continue(v)
@@ -256,7 +262,7 @@ async test "execute_tool_call dispatches to async executor" {
     {
       name: "echo",
       description: "Async echo.",
-      schema: { "type": "object" },
+      schema: JsonSchema({ "type": "object" }),
       execute: Async(async_echo),
     },
   ])
@@ -274,7 +280,7 @@ test "Tools::function_tools preserves description and schema" {
     {
       name: "echo",
       description: "Echo what comes in.",
-      schema: { "type": "object", "properties": {} },
+      schema: JsonSchema({ "type": "object", "properties": {} }),
       execute: Sync(_args => Continue("ok")),
     },
   ])
@@ -299,19 +305,19 @@ test "Tools::function_tools yields one entry per definition" {
     {
       name: "first",
       description: "First.",
-      schema: { "type": "object" },
+      schema: JsonSchema({ "type": "object" }),
       execute: Sync(_args => Continue("1")),
     },
     {
       name: "second",
       description: "Second.",
-      schema: { "type": "object" },
+      schema: JsonSchema({ "type": "object" }),
       execute: Sync(_args => Continue("2")),
     },
     {
       name: "third",
       description: "Third.",
-      schema: { "type": "object" },
+      schema: JsonSchema({ "type": "object" }),
       execute: Sync(_args => Continue("3")),
     },
   ])
