@@ -39,13 +39,15 @@ has limited MoonBit knowledge compared with mainstream languages.
 
 ## Tools
 
-The agent exposes five local tools to DeepSeek:
+The agent exposes six local tools to DeepSeek:
 
 - `shell`: runs `arguments.cmd` through `sh -c`, optionally in `arguments.cwd`,
   and returns exit code plus merged output.
 - `read`: reads `arguments.path` as text.
 - `edit`: replaces exact text in `arguments.path`.
 - `write`: overwrites `arguments.path` with `arguments.content`.
+- `moon_check`: runs `moon check --output-json` directly, optionally in
+  `arguments.cwd`, and returns exit code plus merged output.
 - `finish`: ends the task with `arguments.answer`.
 
 Tool-call arguments are parsed from DeepSeek's raw JSON argument string and then
@@ -91,3 +93,5 @@ improving:
   tool now accepts optional `cwd` to avoid repeated ad hoc `cd` command strings.
 - The default step limit is 1000, and the CLI can override it with
   `--max-steps` or `OPENSEEK_MAX_STEPS`.
+- MoonBit validation should prefer the `moon_check` tool over shell pipelines
+  when the task only needs `moon check` feedback.
