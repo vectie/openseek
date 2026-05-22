@@ -17,7 +17,7 @@ pub async fn run(
   )
   let tools = tool_definitions() catch {
     error => {
-      log_line("agent setup failed: \{error}")
+      std_logger <+ "agent setup failed: \{error}\n"
       return
     }
   }
@@ -26,15 +26,15 @@ pub async fn run(
     ChatMessage(User, content=task),
   ]
   for step in 0..<max_steps {
-    log_line("--- step \{step + 1} ---")
+    std_logger <+ "--- step \{step + 1} ---\n"
     let response = client.chat(messages, tools=tools.function_tools())
     if response.content != "" {
-      log_line("agent: \{response.content}")
+      std_logger <+ "agent: \{response.content}\n"
     }
     print_usage(response.usage)
     if response.tool_calls.length() == 0 {
-      log_line("=== finished ===")
-      log_line(response.content)
+      std_logger <+ "=== finished ===\n"
+      std_logger <+ "\{response.content}\n"
       return
     }
     let reasoning_content = match response.reasoning_content {
@@ -51,7 +51,7 @@ pub async fn run(
     for native_call in response.tool_calls {
       let tool_call = @agent_tool.AgentToolCall(native_call) catch {
         error => {
-          log_line("tool: error: \{error}")
+          std_logger <+ "tool: error: \{error}\n"
           messages.push(
             ChatMessage(Tool(native_call.id), content="error: \{error}"),
           )
@@ -61,23 +61,23 @@ pub async fn run(
       let result = @agent_tool.execute_tool_call(tool_call, tools)
       let output = match result {
         Control(Finish(answer)) => {
-          log_line("=== finished ===")
-          log_line(answer)
+          std_logger <+ "=== finished ===\n"
+          std_logger <+ "\{answer}\n"
           return
         }
         Control(Abort(reason)) => {
-          log_line("=== aborted ===")
-          log_line(reason)
+          std_logger <+ "=== aborted ===\n"
+          std_logger <+ "\{reason}\n"
           return
         }
         Respond(output) => output
       }
       let label = if output.is_error { "tool error" } else { "tool" }
-      log_line("\{label}: \{output.content}")
+      std_logger <+ "\{label}: \{output.content}\n"
       messages.push(ChatMessage(Tool(native_call.id), content=output.content))
     }
   }
-  log_line("=== max steps exhausted ===")
+  std_logger <+ "=== max steps exhausted ===\n"
 }
 
 ///|
@@ -96,11 +96,6 @@ async fn LogSink::write_string(self : LogSink, text : String) -> Unit {
 ///|
 async fn[A : Show] LogSink::write(self : LogSink, value : A) -> Unit {
   self.write_string(value.to_string())
-}
-
-///|
-async fn log_line(text : String) -> Unit {
-  std_logger <+ "\{text}\n"
 }
 
 ///|
