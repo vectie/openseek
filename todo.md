@@ -50,6 +50,26 @@
 - `moon_cmd` impact: it caught real `moon test` failures, README doctest failures, native CLI compiler failures, and validated the final documented `moon run --target native` command. This directly fixed the V3 class of missed CLI-target mismatch.
 - Remaining issue: the run took more steps and tokens than V3. The agent still wrote large parser files before the first meaningful check, read too much dependency source while discovering async APIs, and used `moon test --update` too freely.
 
+## DeepSeek V4 Flash TOML Parser
+
+- Status: failed/incomplete as of 2026-05-22 20:14 CST.
+- Task: same TOML parser plus JSON-dump CLI task, using `--max-steps 1000`, `moon_check`, and `moon_cmd`.
+- Model setting: `DEEPSEEK_MODEL=deepseek-v4-flash`.
+- First attempt log: `.moonagent/eval_runs/results/openseek_toml_cli_d4flash_v1.log`
+- First attempt size: 23 lines / 645 bytes.
+- First attempt result: failed at step 1 by returning a JSON-like plan as assistant text instead of calling tools. No task files were created.
+- Tool smoke log: `.moonagent/eval_runs/results/openseek_d4flash_tool_smoke.log`
+- Tool smoke size: 9 lines / 270 bytes.
+- Tool smoke result: succeeded; Flash called the shell tool for `pwd` and then finished, so the first attempt was prompt/tool-use sensitivity rather than complete tool inability.
+- Second attempt log: `.moonagent/eval_runs/results/openseek_toml_cli_d4flash_v2.log`
+- Second attempt size: 5,399 lines / 326,984 bytes.
+- Output workspace: `.moonagent/eval_runs/toml_cli_task_flash_v2`
+- Second attempt result: partially recovered, then failed. It reached a passing `moon check --output-json` at step 140 before writing tests, and a native CLI smoke run produced JSON for `key = "value"`. After it generated `toml_parser/toml_parser_test.mbt`, the workspace no longer checked.
+- Final validation: independent `moon check --output-json` exits 255 with 117 errors and 48 warnings, dominated by invalid multiline string usage in tests. Independent `moon test --target native toml_parser` exits 1 with the same test syntax failures.
+- Final run status: the transcript ends at step 147 with `OSError(@socket.Tcp::write(): Broken pipe)` after the failed test command; there is no `=== finished ===` success marker.
+- Guardrail result: no `moon test --update` attempt was observed, so the snapshot-update guardrail did not trigger.
+- Performance notes: Flash was fast enough to recover from the parser package's initial compile wall, but it relied on many one-off edits, got stuck on MoonBit syntax/API details for about 100 steps, and did not maintain validation after adding tests. It needs a stricter staged workflow before it is useful for this class of MoonBit task.
+
 ## Agent Performance Improvements To Investigate
 
 - Done: stream logs per step through async stdio instead of relying on buffered `println`. During this run the log stayed at 0 bytes for several minutes, then flushed in large chunks, which made live supervision difficult.
@@ -67,3 +87,5 @@
 - Done: add native CLI ergonomics checks in agent policy. V4 validated README commands with `moon_cmd` and explicit `--target native`.
 - Done: add a `moon_cmd` guardrail against using `moon test --update` without `test_update_kind` and `test_update_reason`.
 - Reduce token-heavy file reads during eval: prefer package docs, focused ranges, or summaries over dumping full dependency sources and generated files into the log.
+- Teach the agent a staged validation invariant: after a package or test file is added, immediately rerun `moon check` before continuing, and treat a previously passing project as regressed until proven otherwise.
+- Add prompt guidance for `#|...` multiline strings in MoonBit tests: bind them to local names or wrap them in parentheses before passing as function arguments.
