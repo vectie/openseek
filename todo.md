@@ -37,6 +37,19 @@
 - Performance improvement over earlier runs: the agent recovered from manifest and API mistakes, discovered current `Json` and async filesystem APIs before finalizing code, used `moon_check` repeatedly, and reached a clean parser package by the mid-run before adding CLI/tests/docs.
 - Remaining issue: the README says `moon run cmd/main -- <file.toml>`, but the package is native-only and the module does not set `preferred_target = "native"`, so the documented command fails unless the user passes `--target native`.
 
+## DeepSeek V4 Pro TOML Parser V4
+
+- Status: succeeded as of 2026-05-22 19:49 CST after adding `moon_cmd`.
+- Task: same TOML parser plus JSON-dump CLI task, using `--max-steps 1000`, with explicit instruction to use `moon_check` for compiler diagnostics and `moon_cmd` for tests, runs, info, fmt, and README command validation.
+- Log: `.moonagent/eval_runs/results/openseek_toml_cli_d4pro_reasoning_v4.log`
+- Log size: 6,477 lines / 277,636 bytes.
+- Output workspace: `.moonagent/eval_runs/toml_cli_task_v4`
+- Result: the agent finished successfully at step 135 with parser package, native CLI package, README, blackbox tests, whitebox tests, generated interface, and passing validation.
+- Validation: independent `moon check` and `moon test` in the generated workspace passed with 22 tests.
+- CLI smoke: `moon run --target native cmd/main -- test.toml` and stdin piping both produced valid JSON.
+- `moon_cmd` impact: it caught real `moon test` failures, README doctest failures, native CLI compiler failures, and validated the final documented `moon run --target native` command. This directly fixed the V3 class of missed CLI-target mismatch.
+- Remaining issue: the run took more steps and tokens than V3. The agent still wrote large parser files before the first meaningful check, read too much dependency source while discovering async APIs, and used `moon test --update` too freely.
+
 ## Agent Performance Improvements To Investigate
 
 - Done: stream logs per step through async stdio instead of relying on buffered `println`. During this run the log stayed at 0 bytes for several minutes, then flushed in large chunks, which made live supervision difficult.
@@ -51,5 +64,6 @@
 - Do not hide validation failures behind successful shell exits. In the retry, one check-like command returned `exit=0` while printing compiler failures, which led the loop to continue from a false success signal.
 - Keep module/package manifests and dependency assumptions under validation. The retry repeatedly mis-modeled `@json.Json`, `String::split`, suberror constructor labels, and `@string`/`@strconv` parsing APIs.
 - Done: add `moon_cmd` for direct `moon test`, `moon run`, `moon info`, `moon fmt`, and `moon build` validation without shell status masking.
-- Add native CLI ergonomics checks in agent policy: when a package has `supported_targets = ["native"]`, either set module `preferred_target = "native"` or validate README commands with `moon_cmd` and explicit `--target native`.
+- Done: add native CLI ergonomics checks in agent policy. V4 validated README commands with `moon_cmd` and explicit `--target native`.
+- Add a guardrail against using `moon test --update` as the first response to failed tests; require the agent to classify whether the failure is a stale snapshot or a real behavior bug first.
 - Reduce token-heavy file reads during eval: prefer package docs, focused ranges, or summaries over dumping full dependency sources and generated files into the log.
