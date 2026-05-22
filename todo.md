@@ -70,6 +70,20 @@
 - Guardrail result: no `moon test --update` attempt was observed, so the snapshot-update guardrail did not trigger.
 - Performance notes: Flash was fast enough to recover from the parser package's initial compile wall, but it relied on many one-off edits, got stuck on MoonBit syntax/API details for about 100 steps, and did not maintain validation after adding tests. It needs a stricter staged workflow before it is useful for this class of MoonBit task.
 
+## DeepSeek V4 Pro JSON Schema Validator
+
+- Status: partial success/incomplete as of 2026-05-22 21:10 CST.
+- Task: create a more complex MoonBit JSON Schema validator library plus native CLI under `.moonagent/eval_runs/json_schema_validator_pro_v1`.
+- Model setting: `DEEPSEEK_MODEL=deepseek-v4-pro`, `--max-steps 1000`.
+- Log: `.moonagent/eval_runs/results/openseek_json_schema_d4pro_reasoning_v1.log`
+- Log size: 73,791 lines / 3,389,910 bytes.
+- Output workspace: `.moonagent/eval_runs/json_schema_validator_pro_v1`
+- Result: the run stopped at step 103 with a DeepSeek context-length error after the CLI printed a huge generated C/native artifact into the transcript. There is no `=== finished ===` success marker.
+- Library validation: independent `moon check`, `moon check --target native`, `moon test`, and `moon test --target native` all pass in the generated workspace. Final test count is 31/31 passing.
+- CLI validation: independent `moon run --target native cmd/main -- fixtures/passing/schema1.json fixtures/passing/instance1.json` exits 0 but prints a debug dump of generated C/native output and then returns `{"valid":false,...}` with `Failed to parse schema: Invalid character '#' at line 1, column 0`. The CLI is not usable as delivered.
+- Missing deliverables: no README, no generated `pkg.generated.mbti`, and no final `moon info` output were produced before the context failure.
+- Performance notes: Pro recovered from a large 127-error validator compile wall, fixed public tests without using `moon test --update`, repaired a custom regex implementation based on failing tests, and got both default and native tests green. The main failures were poor file-read/API verification for the native CLI, leaving debug output in the CLI, and not bounding command output before feeding it back into the model.
+
 ## Agent Performance Improvements To Investigate
 
 - Done: stream logs per step through async stdio instead of relying on buffered `println`. During this run the log stayed at 0 bytes for several minutes, then flushed in large chunks, which made live supervision difficult.
@@ -89,3 +103,5 @@
 - Reduce token-heavy file reads during eval: prefer package docs, focused ranges, or summaries over dumping full dependency sources and generated files into the log.
 - Teach the agent a staged validation invariant: after a package or test file is added, immediately rerun `moon check` before continuing, and treat a previously passing project as regressed until proven otherwise.
 - Add prompt guidance for `#|...` multiline strings in MoonBit tests: bind them to local names or wrap them in parentheses before passing as function arguments.
+- Add output caps/summarization for `moon_cmd` and shell-style command results. A single CLI debug run in the JSON Schema eval injected megabytes of generated native C into the model context and ended the run with a context-length error.
+- Add a CLI semantic validation helper that can assert stdout is valid JSON and matches a small predicate, not only that `moon run` exits 0.
