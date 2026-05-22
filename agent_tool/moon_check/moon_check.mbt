@@ -257,3 +257,86 @@ async test "moon_check rejects non-object arguments" {
   assert_eq(output.content, "error: moon_check requires object arguments")
   assert_true(output.is_error)
 }
+
+///|
+async test "moon_check validates a real fixture project" {
+  let project = copy_fixture_project("valid_project")
+  let canonical = @fs.realpath(project)
+  let result = execute({ "cwd": project })
+  let _ = @fs.rmdir(project, recursive=true) catch { _ => () }
+  guard result is Respond(output) else { fail("expected Respond") }
+  assert_false(output.is_error)
+  inspect(
+    stable_moon_check_output(output.content, project, canonical),
+    content=(
+      #|cwd=<fixture>
+      #|command=moon check --output-json
+      #|exit=0
+      #|Finished. moon: ran 2 tasks, now up to date
+    ),
+  )
+}
+
+///|
+async test "moon_check reports diagnostics from a broken fixture project" {
+  let project = copy_fixture_project("invalid_project")
+  let canonical = @fs.realpath(project)
+  let result = execute({ "cwd": project })
+  let _ = @fs.rmdir(project, recursive=true) catch { _ => () }
+  guard result is Respond(output) else { fail("expected Respond") }
+  assert_true(output.is_error)
+  inspect(
+    stable_moon_check_output(output.content, project, canonical),
+    content=(
+      #|cwd=<fixture>
+      #|command=moon check --output-json
+      #|exit=255
+      #|{"$message_type":"diagnostic","level":"error","error_code":4014,"path":"<fixture>/lib.mbt","loc":"3:3-3:15","message":"Expr Type Mismatch\n        has type : String\n        wanted   : Int"}
+      #|Failed with 0 warnings, 1 errors.
+      #|Error: failed when checking project
+    ),
+  )
+}
+
+///|
+async fn copy_fixture_project(name : String) -> String {
+  let target = @fs.tmpdir(prefix="openseek-moon-check-")
+  copy_fixture_file(name, "moon.mod.fixture", target + "/moon.mod")
+  copy_fixture_file(name, "moon.pkg.fixture", target + "/moon.pkg")
+  copy_fixture_file(name, "lib.mbt.fixture", target + "/lib.mbt")
+  target
+}
+
+///|
+async fn copy_fixture_file(
+  fixture : String,
+  file : String,
+  target : String,
+) -> Unit {
+  let content = @fs.read_file(
+    "agent_tool/moon_check/fixtures/\{fixture}/\{file}",
+  ).text()
+  @fs.write_file(target, content, create_mode=CreateOrTruncate)
+}
+
+///|
+fn stable_moon_check_output(
+  content : String,
+  project : String,
+  canonical : String,
+) -> String {
+  let normalized = content.replace_all(
+    old=canonical,
+    new="<fixture>",
+  ).replace_all(
+    old=project,
+    new="<fixture>",
+  )
+  let stable_lines : Array[String] = []
+  for line in normalized.split("\n") {
+    if !line.has_prefix("failed: ") {
+      stable_lines.push(line.to_owned())
+    }
+  }
+  stable_lines.join("\n").trim().to_owned()
+}

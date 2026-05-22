@@ -43,5 +43,7 @@ test "moon_check tool advertises the expected schema" {
 ```
 
 Process execution is intentionally not exercised from doc tests: running
-`moon check` from inside `moon test` can contend with the active build. The
-unit coverage checks argument parsing and exact command construction instead.
+`moon check` against the active package from inside `moon test` can contend with
+the active build. The real-world unit tests copy fixture projects into `/tmp`
+and run `moon_check` there, covering both a valid project and a broken project
+that emits compiler diagnostics.
