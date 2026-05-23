@@ -33,6 +33,11 @@ Prefer `edit` when changing a small region in an existing user-authored file.
 Prefer `write` when the file is new, generated, or easier to reason about as a
 complete replacement.
 
+MoonBit manifests get a small extra guardrail because bad manifests poison every
+later compiler diagnostic. New projects should write `moon.mod`, not legacy
+`moon.mod.json`; `moon.mod` and `moon.pkg` rewrites that look empty, JSON-style,
+or suspiciously tiny are rejected before the file is changed.
+
 ## Arguments
 
 | Name      | Type   | Required | Notes |
@@ -51,6 +56,9 @@ has one of these shapes:
   of the written content.
 - `"error writing <path>: <error>"` — the write failed. Common causes:
   permission denied, missing parent directory, read-only filesystem.
+- `"error writing <path>: moon.mod.json is legacy; create moon.mod ..."` or
+  similar manifest-guard messages — the requested manifest rewrite looked like a
+  likely agent mistake.
 - `"error: write requires arguments.content"` — payload had `path` but no
   `content` (or `content` was not a string).
 - `"error: write requires arguments.path"` — payload was an object missing

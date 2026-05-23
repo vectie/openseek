@@ -15,6 +15,10 @@ Rejecting empty `old_string` and identical replacements protects against
 no-op or explosive edits. The tool is designed for small surgical changes; if a
 file needs a complete rewrite, `write` is the clearer API.
 
+MoonBit manifests get the same safety check as `write`: edits that would create
+legacy `moon.mod.json`, JSON-style `moon.mod`, or suspiciously tiny `moon.pkg`
+content are rejected before the original file is overwritten.
+
 ## API Style
 
 Use a context-rich exact string that should occur once:
@@ -58,6 +62,9 @@ has one of these shapes:
 - `"ok: replaced <n> occurrence(s) in <path>"` on success.
 - `"error editing <path>: old_string not found"` — no exact match was found.
 - `"error editing <path>: old_string matched <n> times; set replace_all=true to replace all occurrences"` — the edit was ambiguous.
+- `"error editing <path>: moon.pkg content is suspiciously small"` or similar
+  manifest-guard messages — the replacement would likely break MoonBit package
+  discovery.
 - `"error editing <path>: <error>"` — reading or writing failed.
 - `"error: edit requires arguments.<field>"` — payload was an object but missed a required field.
 - `"error: edit requires object arguments"` — payload was not a JSON object.

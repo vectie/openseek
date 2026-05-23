@@ -141,11 +141,7 @@ fn shell_words(cmd : String) -> Array[String] {
 
 ///|
 fn clean_shell_word(word : String) -> String {
-  word
-  .trim(chars="\t\r\n ")
-  .to_owned()
-  .trim(chars=";&|()")
-  .to_owned()
+  word.trim(chars="\t\r\n ").to_owned().trim(chars=";&|()").to_owned()
 }
 
 ///|
@@ -345,13 +341,10 @@ async test "shell merges stderr into the captured output" {
 test "shell detects moon command policy errors" {
   assert_true(moonbit_command_policy_error("moon test") is Some(_))
   assert_true(
-    moonbit_command_policy_error("DEEPSEEK_MODEL=x moon run cmd/main") is Some(
-      _,
-    ),
+    moonbit_command_policy_error("DEEPSEEK_MODEL=x moon run cmd/main")
+    is Some(_),
   )
-  assert_true(
-    moonbit_command_policy_error("cd demo && moon check") is Some(_),
-  )
+  assert_true(moonbit_command_policy_error("cd demo && moon check") is Some(_))
   assert_true(moonbit_command_policy_error("moon --version") is None)
   assert_true(moonbit_command_policy_error("git status --short") is None)
 }

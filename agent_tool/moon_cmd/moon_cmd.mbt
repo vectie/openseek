@@ -389,8 +389,14 @@ async fn collect_moon_output(
       let process_input = @process.redirect_from_file(input_path)
       let result = match cwd {
         Some(cwd) =>
-          @process.collect_output_merged("moon", args, stdin=process_input, cwd~)
-        None => @process.collect_output_merged("moon", args, stdin=process_input)
+          @process.collect_output_merged(
+            "moon",
+            args,
+            stdin=process_input,
+            cwd~,
+          )
+        None =>
+          @process.collect_output_merged("moon", args, stdin=process_input)
       }
       let _ = @fs.rmdir(dir, recursive=true) catch { _ => () }
       result

@@ -51,6 +51,14 @@ async fn execute(arguments : Json) -> @agent_tool.ToolAction {
       )
   }
   try {
+    match manifest_write_error(path, content) {
+      Some(message) =>
+        return @agent_tool.ToolAction::respond(
+          "error writing \{path}: \{message}",
+          is_error=true,
+        )
+      None => ()
+    }
     @fs.write_file(path, content, create_mode=CreateOrTruncate)
     @agent_tool.ToolAction::respond(
       "ok: wrote \{content.length()} chars to \{path}",
@@ -62,6 +70,51 @@ async fn execute(arguments : Json) -> @agent_tool.ToolAction {
         is_error=true,
       )
   }
+}
+
+///|
+async fn manifest_write_error(path : String, content : String) -> String? {
+  let trimmed = content.trim().to_owned()
+  if is_moon_mod_json_path(path) && !@fs.exists(path) {
+    return Some(
+      "moon.mod.json is legacy; create moon.mod for new MoonBit projects",
+    )
+  }
+  if is_moon_mod_path(path) {
+    if trimmed == "" {
+      return Some("moon.mod must not be empty")
+    }
+    if trimmed.has_prefix("{") || trimmed.contains("\"name\"") {
+      return Some("moon.mod uses current text syntax, not JSON")
+    }
+    if !trimmed.contains("name =") {
+      return Some("moon.mod should include a module `name = ...` entry")
+    }
+  }
+  if is_moon_pkg_path(path) {
+    if trimmed.length() < 8 {
+      return Some("moon.pkg content is suspiciously small")
+    }
+    if trimmed.has_prefix("{") {
+      return Some("moon.pkg uses current text syntax, not JSON")
+    }
+  }
+  None
+}
+
+///|
+fn is_moon_mod_path(path : String) -> Bool {
+  path == "moon.mod" || path.has_suffix("/moon.mod")
+}
+
+///|
+fn is_moon_mod_json_path(path : String) -> Bool {
+  path == "moon.mod.json" || path.has_suffix("/moon.mod.json")
+}
+
+///|
+fn is_moon_pkg_path(path : String) -> Bool {
+  path == "moon.pkg" || path.has_suffix("/moon.pkg")
 }
 
 ///|
@@ -97,6 +150,39 @@ async test "write accepts empty content" {
   assert_false(output.is_error)
   let read_back = @fs.read_file(path).text()
   assert_eq(read_back, "")
+}
+
+///|
+async test "write rejects new legacy moon.mod.json" {
+  let dir = @fs.tmpdir(prefix="openseek-write-manifest-")
+  let path = dir + "/moon.mod.json"
+  let result = execute({ "path": path, "content": "{\"name\":\"legacy\"}" })
+  let _ = @fs.rmdir(dir, recursive=true) catch { _ => () }
+  guard result is Respond(output) else { fail("expected Respond") }
+  assert_true(output.is_error)
+  assert_true(output.content.contains("moon.mod.json is legacy"))
+}
+
+///|
+async test "write rejects json style moon.mod" {
+  let dir = @fs.tmpdir(prefix="openseek-write-manifest-")
+  let path = dir + "/moon.mod"
+  let result = execute({ "path": path, "content": "{\"name\":\"bad\"}" })
+  let _ = @fs.rmdir(dir, recursive=true) catch { _ => () }
+  guard result is Respond(output) else { fail("expected Respond") }
+  assert_true(output.is_error)
+  assert_true(output.content.contains("moon.mod uses current text syntax"))
+}
+
+///|
+async test "write rejects suspiciously tiny moon.pkg" {
+  let dir = @fs.tmpdir(prefix="openseek-write-manifest-")
+  let path = dir + "/moon.pkg"
+  let result = execute({ "path": path, "content": "x" })
+  let _ = @fs.rmdir(dir, recursive=true) catch { _ => () }
+  guard result is Respond(output) else { fail("expected Respond") }
+  assert_true(output.is_error)
+  assert_true(output.content.contains("moon.pkg content is suspiciously small"))
 }
 
 ///|
