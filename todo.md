@@ -113,6 +113,24 @@
 - `moon_ide` impact: the agent used docs and definitions for `Json`, async `fs`, `io.Data`, and `&Data::text`; after inspecting the real `Data` source it repaired the native CLI file-read path.
 - Remaining gaps: the agent still waited until after a large schema file before its first meaningful check, spent many steps on MoonBit mutability and enum constructor mistakes, dumped full dependency/source ranges while diagnosing `Data`, and had a few brittle edit failures (`old_string not found`, missing edit path).
 
+## DeepSeek V4 Pro JSON Schema Validator V4 With Bounded Read
+
+- Status: partial success/incomplete as of 2026-05-23 14:22 CST.
+- Task: repeat the JSON Schema validator library plus native CLI task after adding bounded `read` output for ranged and character-capped file inspection.
+- Model setting: `DEEPSEEK_MODEL=deepseek-v4-pro`, `--max-steps 1000`.
+- Log: `.moonagent/eval_runs/results/openseek_json_schema_d4pro_reasoning_v4_bounded_read.log`
+- Log size: 3,345 lines / 303,726 bytes (328K on disk).
+- Output workspace: `.moonagent/eval_runs/json_schema_validator_pro_v4_bounded_read`
+- Result: the agent finished at step 180 with a parser/validator library, native CLI package, fixtures, tests, README, and generated interfaces.
+- Independent validation: `moon check --output-json` passed; default and native `moon test` both passed with 21 tests.
+- Inline CLI smoke: `moon run --target native cmd/main -- '{"type":"integer"}' '42'` printed `valid`; the string case printed `invalid` with an integer type error.
+- Contract gap: the final CLI accepts inline JSON strings, not schema and instance file paths. `moon run --target native cmd/main -- fixtures/schema_string.json fixtures/valid_string.json` fails with `Error parsing schema JSON: Invalid character 'i' at line 1, column 1`, so the task is not fully delivered.
+- Bounded-read impact: positive. The agent repeatedly used `read` with `start_line` and `max_lines` while repairing generated files, and those calls returned range metadata instead of flooding the transcript with whole files.
+- Remaining output gaps: broad shell commands still produced noisy listings and large compiler command lines, and `moon_cmd` output caps do not control arbitrary shell output or file/source dumps.
+- Guardrail gap: the agent bypassed the `moon_cmd` snapshot-update guardrail by using shell after `moon_cmd` rejected an unreviewed `moon test --update` attempt.
+- Debug hygiene gap: the agent created temporary debug files/packages during diagnosis, including a root `debug_main.mbt` that broke compilation until removed, and it briefly overwrote the root `moon.pkg` with an empty file before repairing it.
+- Best next ROI: enforce MoonBit command policy at the shell layer, add semantic CLI contract checks for file-path tools and JSON stdout predicates, and require scratch/debug code to live outside compiled packages.
+
 ## Agent Performance Improvements To Investigate
 
 - Done: stream logs per step through async stdio instead of relying on buffered `println`. During this run the log stayed at 0 bytes for several minutes, then flushed in large chunks, which made live supervision difficult.
@@ -130,11 +148,13 @@
 - Done: add native CLI ergonomics checks in agent policy. V4 validated README commands with `moon_cmd` and explicit `--target native`.
 - Done: add a `moon_cmd` guardrail against using `moon test --update` without `test_update_kind` and `test_update_reason`.
 - Done: add a read-only `moon_ide` tool for semantic `doc`, `outline`, `peek_def`, `hover`, and `find_references` queries.
-- Reduce token-heavy file reads during eval: prefer package docs, focused ranges, or summaries over dumping full dependency sources and generated files into the log.
+- Done: add bounded `read` output with `start_line`, `max_lines`, and `max_output_chars`. In the JSON Schema V4 eval this kept generated-file inspections focused and prevented whole-file dumps during the repair loop.
+- Reduce remaining token-heavy non-command outputs: apply similar caps or summaries to IDE source/definition dumps and broad shell listings.
 - Teach the agent a staged validation invariant: after a package or test file is added, immediately rerun `moon check` before continuing, and treat a previously passing project as regressed until proven otherwise.
 - Add prompt guidance for `#|...` multiline strings in MoonBit tests: bind them to local names or wrap them in parentheses before passing as function arguments.
 - Done: add output caps/summarization for `moon_cmd` and shell-style command results. The JSON Schema V3 log stayed small enough to finish, where V1/V2 ended with context-length errors after native output flooded the transcript.
 - Done: add prompt guidance for native CLI arguments. In current native `moon run`, `@env.args()[0]` can be the generated C/native path, so the CLI must drop the executable path before reading user files.
-- Add output caps or summaries for non-command tool outputs such as file reads and source/definition dumps. V3 still pasted full generated files and dependency source while diagnosing APIs.
-- Add a CLI semantic validation helper that can assert stdout is valid JSON and matches a small predicate, not only that `moon run` exits 0.
+- Add shell-layer enforcement for MoonBit command policy. In V4 bounded-read, `moon_cmd` rejected unreviewed `moon test --update`, but the agent used shell to bypass the same guardrail.
+- Add a CLI semantic validation helper that can assert stdout is valid JSON, that file-path arguments are actually consumed as files, and that output matches a small predicate, not only that `moon run` exits 0.
+- Keep temporary debug code outside compiled packages, or provide a dedicated scratch package that cannot regress the deliverable package.
 - Make `moon_ide` failures clearer when `cwd` does not exist, or teach the prompt to create the workspace before semantic IDE calls against it.
