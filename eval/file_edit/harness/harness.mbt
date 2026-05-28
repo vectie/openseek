@@ -99,34 +99,7 @@ async fn run_trial(config : Config, index : Int) -> TrialResult {
 
 ///|
 async fn write_fixture(workspace : String, case : @cases.EvalCase) -> Unit {
-  for file in case.initial_files {
-    write_workspace_file(workspace, file.path, file.content)
-  }
-}
-
-///|
-async fn write_workspace_file(
-  workspace : String,
-  path : String,
-  content : String,
-) -> Unit {
-  ensure_parent_dir(workspace, path)
-  @fs.write_file(workspace + "/" + path, content, create_mode=CreateOrTruncate)
-}
-
-///|
-async fn ensure_parent_dir(workspace : String, path : String) -> Unit {
-  let parts = path.split("/").collect()
-  if parts.length() <= 1 {
-    return
-  }
-  let dirs : Array[StringView] = []
-  for i in 0..<(parts.length() - 1) {
-    dirs.push(parts[i])
-  }
-  let _ = @fs.mkdir(workspace + "/" + dirs.join("/"), recursive=true) catch {
-    _ => ()
-  }
+  case.initial.write_to(workspace)
 }
 
 ///|
@@ -196,18 +169,17 @@ async fn check_expected_state(
   workspace : String,
   case : @cases.EvalCase,
 ) -> String {
-  for expected in case.expected_files {
-    let path = workspace + "/" + expected.path
-    let content = @fs.read_file(path).text() catch {
-      error => return "missing expected file \{expected.path}: \{error}"
-    }
-    if content != expected.content {
-      return "content mismatch in \{expected.path}"
-    }
+  let expected_mismatch = case.expected.mismatch_on_disk(workspace)
+  if expected_mismatch != "" {
+    return expected_mismatch
   }
   for unchanged in case.unchanged_files {
-    let expected = initial_content(case, unchanged) catch {
-      error => return "\{error}"
+    let initial = case.initial.get(unchanged) catch {
+      error => return "invalid initial file system: \{error}"
+    }
+    let expected = match initial {
+      Some(content) => content
+      None => return "no initial fixture for unchanged file \{unchanged}"
     }
     let path = workspace + "/" + unchanged
     let content = @fs.read_file(path).text() catch {
@@ -218,16 +190,6 @@ async fn check_expected_state(
     }
   }
   ""
-}
-
-///|
-fn initial_content(case : @cases.EvalCase, path : String) -> String raise {
-  for file in case.initial_files {
-    if file.path == path {
-      return file.content
-    }
-  }
-  fail("no initial fixture for unchanged file \{path}")
 }
 
 ///|

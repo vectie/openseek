@@ -6,7 +6,9 @@ async test "dry run exact replacement oracle" {
   let log_path = root + "/trial.log"
   @fs.mkdir(workspace, recursive=true)
   write_fixture(workspace, case)
-  write_workspace_file(workspace, "src/note.txt", "alpha\ndelta\ngamma\n")
+  @vfs.FileSystem({ "src/note.txt": "alpha\ndelta\ngamma\n" }).write_to(
+    workspace,
+  )
   @fs.write_file(
     log_path,
     (

@@ -4,7 +4,8 @@ This harness measures whether a model can use OpenSeek's file-editing tools
 reliably. The case definitions live in `eval/file_edit/cases`; the reusable
 runner, deterministic oracles, and report writer live in `eval/file_edit/harness`;
 the `eval/file_edit/cmd/main` package is only the CLI wrapper around that
-harness.
+harness. Case fixtures use `bobzhang/openseek/testkit/filesystem`, so the same
+JSON-backed virtual filesystem can be reused by other mock tests.
 
 To see the harness without calling DeepSeek, run the dry-run oracle test:
 

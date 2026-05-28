@@ -1,15 +1,9 @@
 ///|
-pub struct FileSpec {
-  path : String
-  content : String
-}
-
-///|
 pub struct EvalCase {
   id : String
   instructions : String
-  initial_files : Array[FileSpec]
-  expected_files : Array[FileSpec]
+  initial : @vfs.FileSystem
+  expected : @vfs.FileSystem
   unchanged_files : Array[String]
   validation : Array[String]
 }
@@ -56,11 +50,11 @@ fn exact_replace_case() -> EvalCase {
   {
     id: "exact_replace",
     instructions: "In src/note.txt, replace the unique word `beta` with `delta`. Leave every other byte unchanged.",
-    initial_files: [
-      { path: "src/note.txt", content: "alpha\nbeta\ngamma\n" },
-      { path: "src/keep.txt", content: "do not touch\n" },
-    ],
-    expected_files: [{ path: "src/note.txt", content: "alpha\ndelta\ngamma\n" }],
+    initial: FileSystem({
+      "src/note.txt": "alpha\nbeta\ngamma\n",
+      "src/keep.txt": "do not touch\n",
+    }),
+    expected: FileSystem({ "src/note.txt": "alpha\ndelta\ngamma\n" }),
     unchanged_files: ["src/keep.txt"],
     validation: [],
   }
@@ -75,37 +69,31 @@ fn ambiguous_replace_case() -> EvalCase {
       #|from `status = "todo"` to `status = "done"`. Leave the `[admin]`
       #|section unchanged.
     ),
-    initial_files: [
-      {
-        path: "src/status.txt",
-        content: (
-          #|[user]
-          #|name = "Ada"
-          #|status = "todo"
-          #|
-          #|[admin]
-          #|name = "Grace"
-          #|status = "todo"
-          #|
-        ),
-      },
-      { path: "src/keep.txt", content: "unchanged\n" },
-    ],
-    expected_files: [
-      {
-        path: "src/status.txt",
-        content: (
-          #|[user]
-          #|name = "Ada"
-          #|status = "done"
-          #|
-          #|[admin]
-          #|name = "Grace"
-          #|status = "todo"
-          #|
-        ),
-      },
-    ],
+    initial: FileSystem({
+      "src/status.txt": (
+        #|[user]
+        #|name = "Ada"
+        #|status = "todo"
+        #|
+        #|[admin]
+        #|name = "Grace"
+        #|status = "todo"
+        #|
+      ),
+      "src/keep.txt": "unchanged\n",
+    }),
+    expected: FileSystem({
+      "src/status.txt": (
+        #|[user]
+        #|name = "Ada"
+        #|status = "done"
+        #|
+        #|[admin]
+        #|name = "Grace"
+        #|status = "todo"
+        #|
+      ),
+    }),
     unchanged_files: ["src/keep.txt"],
     validation: [],
   }
@@ -120,41 +108,35 @@ fn multiline_replace_case() -> EvalCase {
       #|`"label: " + name.trim().to_owned()`. Preserve the helper function and
       #|the trailing newline exactly.
     ),
-    initial_files: [
-      {
-        path: "src/render.mbt",
-        content: (
-          #|///|
-          #|pub fn render_label(name : String) -> String {
-          #|  "label: " + name
-          #|}
-          #|
-          #|///|
-          #|pub fn helper() -> String {
-          #|  "helper"
-          #|}
-          #|
-        ),
-      },
-      { path: "README.md", content: "render fixture\n" },
-    ],
-    expected_files: [
-      {
-        path: "src/render.mbt",
-        content: (
-          #|///|
-          #|pub fn render_label(name : String) -> String {
-          #|  "label: " + name.trim().to_owned()
-          #|}
-          #|
-          #|///|
-          #|pub fn helper() -> String {
-          #|  "helper"
-          #|}
-          #|
-        ),
-      },
-    ],
+    initial: FileSystem({
+      "src/render.mbt": (
+        #|///|
+        #|pub fn render_label(name : String) -> String {
+        #|  "label: " + name
+        #|}
+        #|
+        #|///|
+        #|pub fn helper() -> String {
+        #|  "helper"
+        #|}
+        #|
+      ),
+      "README.md": "render fixture\n",
+    }),
+    expected: FileSystem({
+      "src/render.mbt": (
+        #|///|
+        #|pub fn render_label(name : String) -> String {
+        #|  "label: " + name.trim().to_owned()
+        #|}
+        #|
+        #|///|
+        #|pub fn helper() -> String {
+        #|  "helper"
+        #|}
+        #|
+      ),
+    }),
     unchanged_files: ["README.md"],
     validation: [],
   }
@@ -172,16 +154,10 @@ fn create_file_case() -> EvalCase {
       #|
       #|Do not change README.md.
     ),
-    initial_files: [
-      { path: "README.md", content: "existing docs\n" },
-      { path: "docs/.keep", content: "" },
-    ],
-    expected_files: [
-      {
-        path: "docs/summary.txt",
-        content: "OpenSeek file edit eval\nstatus: ready\n",
-      },
-    ],
+    initial: FileSystem({ "README.md": "existing docs\n", "docs/.keep": "" }),
+    expected: FileSystem({
+      "docs/summary.txt": "OpenSeek file edit eval\nstatus: ready\n",
+    }),
     unchanged_files: ["README.md", "docs/.keep"],
     validation: [],
   }
@@ -196,52 +172,43 @@ fn compile_fix_case() -> EvalCase {
       #|so `moon check` passes. Use moon_cmd for validation after editing.
       #|Do not change moon.mod or moon.pkg.
     ),
-    initial_files: [
-      {
-        path: "moon.mod",
-        content: (
-          #|name = "openseek/file_edit_fixture"
-          #|
-          #|version = "0.1.0"
-          #|
-          #|preferred_target = "native"
-          #|
-        ),
-      },
-      { path: "moon.pkg", content: "warnings = \"+unnecessary_annotation\"\n" },
-      {
-        path: "lib.mbt",
-        content: (
-          #|///|
-          #|pub fn answer() -> Int {
-          #|  "forty two"
-          #|}
-          #|
-          #|///|
-          #|test "answer" {
-          #|  assert_eq(answer(), 42)
-          #|}
-          #|
-        ),
-      },
-    ],
-    expected_files: [
-      {
-        path: "lib.mbt",
-        content: (
-          #|///|
-          #|pub fn answer() -> Int {
-          #|  42
-          #|}
-          #|
-          #|///|
-          #|test "answer" {
-          #|  assert_eq(answer(), 42)
-          #|}
-          #|
-        ),
-      },
-    ],
+    initial: FileSystem({
+      "moon.mod": (
+        #|name = "openseek/file_edit_fixture"
+        #|
+        #|version = "0.1.0"
+        #|
+        #|preferred_target = "native"
+        #|
+      ),
+      "moon.pkg": "warnings = \"+unnecessary_annotation\"\n",
+      "lib.mbt": (
+        #|///|
+        #|pub fn answer() -> Int {
+        #|  "forty two"
+        #|}
+        #|
+        #|///|
+        #|test "answer" {
+        #|  assert_eq(answer(), 42)
+        #|}
+        #|
+      ),
+    }),
+    expected: FileSystem({
+      "lib.mbt": (
+        #|///|
+        #|pub fn answer() -> Int {
+        #|  42
+        #|}
+        #|
+        #|///|
+        #|test "answer" {
+        #|  assert_eq(answer(), 42)
+        #|}
+        #|
+      ),
+    }),
     unchanged_files: ["moon.mod", "moon.pkg"],
     validation: ["moon", "check"],
   }

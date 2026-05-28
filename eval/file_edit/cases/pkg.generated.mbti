@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "bobzhang/openseek/eval/file_edit/cases"
 
+import {
+  "bobzhang/openseek/testkit/filesystem",
+}
+
 // Values
 pub fn case_for_trial(Int) -> EvalCase
 
@@ -12,17 +16,12 @@ pub fn eval_cases() -> Array[EvalCase]
 pub struct EvalCase {
   id : String
   instructions : String
-  initial_files : Array[FileSpec]
-  expected_files : Array[FileSpec]
+  initial : @filesystem.FileSystem
+  expected : @filesystem.FileSystem
   unchanged_files : Array[String]
   validation : Array[String]
 }
 pub fn EvalCase::task(Self, String) -> String
-
-pub struct FileSpec {
-  path : String
-  content : String
-}
 
 // Type aliases
 

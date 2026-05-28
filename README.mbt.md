@@ -15,6 +15,7 @@ entry point so request encoding can be tested without network access.
 | `bobzhang/openseek/agent_tool` | Tool registry, executor, output, and control-action types. | `agent_tool/README.mbt.md` |
 | `bobzhang/openseek/agent` | Native-only OpenSeek agent loop and local tool dispatch. | `agent/README.mbt.md` |
 | `bobzhang/openseek/cmd/main` | Native-only command-line entry point. | `cmd/main/README.md` |
+| `bobzhang/openseek/testkit/filesystem` | JSON-backed virtual filesystem for tests and eval fixtures. | `testkit/filesystem/README.mbt.md` |
 | `bobzhang/openseek/eval/file_edit/cases` | Deterministic file-editing eval case definitions. | `eval/file_edit/README.md` |
 | `bobzhang/openseek/eval/file_edit/harness` | Reusable file-editing eval runner, oracle, and reporter. | `eval/file_edit/README.md` |
 | `bobzhang/openseek/eval/file_edit/cmd/main` | Native-only CLI wrapper for the file-editing eval harness. | `eval/file_edit/README.md` |
@@ -73,3 +74,7 @@ guardrails.
 The file-editing eval harness is available under `eval/file_edit`. It runs the
 real agent against isolated fixtures and checks exact final file state, making
 it suitable for cheap Flash baselines such as 8 successful edits out of 10.
+
+The `testkit/filesystem` package provides reusable JSON-backed text fixtures for
+mock tests and evals. It materializes flat path-to-content JSON objects under a
+temporary root and compares listed files against disk.
