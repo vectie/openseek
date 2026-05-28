@@ -32,11 +32,13 @@ The agent client enables DeepSeek V4 thinking mode explicitly with
 `reasoning_content` with tool calls, the agent preserves it in the assistant
 tool-call message for the next request.
 
-The system prompt embeds the handwritten `moonbit-agent-guide` skill content
-verbatim before the user task, then appends a short OpenSeek-specific addendum
-from real DeepSeek runs. This keeps MoonBit-specific syntax, package layout, and
-validation rules in the cache-friendly prefix, which is useful because DeepSeek
-has limited MoonBit knowledge compared with mainstream languages.
+The system prompt source lives in `system_prompt.md`. During development,
+`moon.pkg` uses the module-level `md_to_mbt_string` rule plus `dev_build` to
+generate `generated_prompt.mbt`, which exposes it to the agent as a MoonBit
+multiline string. The generated file is committed so downstream users can build
+the package without running local pre-build commands. Other packages can reuse
+the same rule with an input named after the generated function, e.g.
+`input: "help_text.md"` generates `fn help_text() -> String`.
 
 ## Tools
 

@@ -1,14 +1,6 @@
+// Generated from system_prompt.md by moon dev_build. DO NOT EDIT.
 ///|
 fn system_prompt() -> String {
-  [
-    agent_prompt_header(),
-    moonbit_agent_guide_prompt(),
-    openseek_deepseek_addendum(),
-  ].join("\n\n")
-}
-
-///|
-fn agent_prompt_header() -> String {
   (
     #|You are OpenSeek, a small MoonBit coding agent.
     #|
@@ -16,12 +8,7 @@ fn agent_prompt_header() -> String {
     #|Use finish when the task is complete.
     #|
     #|The MoonBit Agent Guide below is copied verbatim from the local `moonbit-agent-guide` skill. Treat it as your primary MoonBit knowledge. It is intentionally stable and cache-friendly; keep task-specific facts in the user conversation and keep this stable guidance at the front of the context.
-  )
-}
-
-///|
-fn moonbit_agent_guide_prompt() -> String {
-  (
+    #|
     #|---
     #|name: moonbit-agent-guide
     #|description: Guide for writing, refactoring, and testing MoonBit projects. Use when working in MoonBit modules or packages, organizing MoonBit files, using moon tooling (build/check/run/test/doc/ide etc.), or following MoonBit-specific layout, documentation, and testing conventions.
@@ -1295,12 +1282,7 @@ fn moonbit_agent_guide_prompt() -> String {
     #|
     #|For deeper syntax, types, and examples, read `references/moonbit-language-fundamentals.mbt.md`.
     #|
-  )
-}
-
-///|
-fn openseek_deepseek_addendum() -> String {
-  (
+    #|
     #|OpenSeek DeepSeek Addendum
     #|
     #|These notes come from real DeepSeek V4-Pro coding-agent runs and supplement the guide without replacing it:
@@ -1323,22 +1305,4 @@ fn openseek_deepseek_addendum() -> String {
     #|- For real workspace tasks, use the `moon_check` tool for `moon check` feedback. Use `moon_cmd` for exact `moon test`, `moon run`, `moon info`, `moon fmt`, and README command validation; it runs `moon` directly and preserves the real exit code. Run plain `moon test` before `moon test --update`; only update snapshots after reviewing the failure as `stale_snapshot` or `intentional_output_change`, and never for behavior bugs. `moon_cmd` and `shell` truncate large output and report truncation as a tool error; if a CLI smoke test is truncated or emits generated native/C output, fix the CLI or command rather than increasing the output cap. Use the shell tool's `cwd` argument only for commands outside the supported MoonBit command set instead of embedding repeated `cd ... &&` command strings.
     #|- Before `finish`, derive two or three acceptance probes from the user's task and any fixtures or README examples you created. For user-facing CLIs, run those probes with `moon_cmd run` and verify the real contract: file arguments are read as files, stdin mode works when promised, stdout has the requested JSON/JSON Lines/text shape, stderr is clean unless the task expects an error, and failure cases do not leak runtime debug output such as `Failure(...)`. If exact output ordering is not part of the contract, still check stable semantic properties such as valid JSON, a known field value, or the number of JSON Lines.
   )
-}
-
-///|
-test "system prompt includes moonbit guide" {
-  let prompt = system_prompt()
-  assert_true(prompt.contains("# Agent Workflow"))
-  assert_true(prompt.contains("MoonBit Error Handling"))
-  assert_true(prompt.contains("--warn-list +unnecessary_annotation"))
-  assert_true(prompt.contains("cache-friendly"))
-  assert_true(prompt.contains("moon_ide outline"))
-  assert_true(prompt.contains("start_line"))
-  assert_true(prompt.contains("flat like Go packages"))
-  assert_true(prompt.contains("generated native/C entry path"))
-  assert_true(prompt.contains("create `moon.mod`, not `moon.mod.json`"))
-  assert_true(prompt.contains("After editing `moon.mod`, `moon.pkg`"))
-  assert_true(prompt.contains("acceptance probes"))
-  assert_true(prompt.contains("file arguments are read as files"))
-  assert_true(prompt.contains("OpenSeek DeepSeek Addendum"))
 }
