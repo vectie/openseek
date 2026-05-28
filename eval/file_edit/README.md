@@ -15,8 +15,9 @@ moon test eval/file_edit/harness --filter "dry run exact replacement oracle"
 The default baseline is cheap Flash:
 
 ```bash
-DEEPSEEK_MODEL=deepseek-v4-flash \
 moon run eval/file_edit/cmd/main -- \
+  --api-key "$DEEPSEEK" \
+  --model deepseek-v4-flash \
   --runs 10 \
   --min-successes 8 \
   --max-steps 200 \
