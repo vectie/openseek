@@ -3,4 +3,6 @@ _build/
 .mooncakes/
 .moonagent/
 .repos/
-eval/
+eval/*
+!eval/file_edit/
+!eval/file_edit/**

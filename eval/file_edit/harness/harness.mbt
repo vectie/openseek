@@ -1,0 +1,282 @@
+///|
+pub struct TrialResult {
+  index : Int
+  case_id : String
+  success : Bool
+  reason : String
+  workspace : String
+  log_path : String
+  exit_code : Int
+  steps : Int
+  tool_errors : Int
+  shell_uses : Int
+  edit_successes : Int
+  write_successes : Int
+  validation_passed : Bool
+  marker_present : Bool
+  warnings : String
+}
+
+///|
+pub struct EvalReport {
+  model : String
+  runs : Int
+  min_successes : Int
+  successes : Int
+  out_dir : String
+  results : Array[TrialResult]
+}
+
+///|
+pub async fn run_suite(config : Config) -> EvalReport {
+  prepare_output_dir(config.out_dir)
+  let results : Array[TrialResult] = []
+  for index in 0..<config.runs {
+    let result = run_trial(config, index)
+    results.push(result)
+  }
+  let report : EvalReport = {
+    model: config.model.to_string(),
+    runs: config.runs,
+    min_successes: config.min_successes,
+    successes: count_successes(results),
+    out_dir: config.out_dir,
+    results,
+  }
+  write_report_files(report)
+  report
+}
+
+///|
+async fn prepare_output_dir(out_dir : String) -> Unit {
+  let _ = @fs.rmdir(out_dir, recursive=true) catch { _ => () }
+  @fs.mkdir(out_dir + "/workspaces", recursive=true)
+  @fs.mkdir(out_dir + "/logs", recursive=true)
+}
+
+///|
+async fn run_trial(config : Config, index : Int) -> TrialResult {
+  let case = @cases.case_for_trial(index)
+  let workspace = config.out_dir +
+    "/workspaces/" +
+    padded_index(index + 1) +
+    "-" +
+    case.id
+  @fs.mkdir(workspace, recursive=true)
+  write_fixture(workspace, case)
+  let task = case.task(@fs.realpath(workspace))
+  let args = [
+    "run",
+    "cmd/main",
+    "--",
+    "--max-steps",
+    config.max_steps.to_string(),
+    "--model",
+    config.model.to_string(),
+    task,
+  ]
+  let (exit_code, output) = @process.collect_output_merged(
+    "moon",
+    args,
+    extra_env={
+      "DEEPSEEK": config.api_key,
+      "DEEPSEEK_MODEL": config.model.to_string(),
+      "OPENSEEK_MAX_STEPS": config.max_steps.to_string(),
+    },
+    inherit_env=true,
+    cwd=config.repo_root,
+  )
+  let log_text = output.text()
+  let log_path = config.out_dir +
+    "/logs/" +
+    padded_index(index + 1) +
+    "-" +
+    case.id +
+    ".log"
+  @fs.write_file(log_path, log_text, create_mode=CreateOrTruncate)
+  evaluate_trial(index, case, workspace, log_path, exit_code, log_text)
+}
+
+///|
+async fn write_fixture(workspace : String, case : @cases.EvalCase) -> Unit {
+  for file in case.initial_files {
+    write_workspace_file(workspace, file.path, file.content)
+  }
+}
+
+///|
+async fn write_workspace_file(
+  workspace : String,
+  path : String,
+  content : String,
+) -> Unit {
+  ensure_parent_dir(workspace, path)
+  @fs.write_file(workspace + "/" + path, content, create_mode=CreateOrTruncate)
+}
+
+///|
+async fn ensure_parent_dir(workspace : String, path : String) -> Unit {
+  let parts = path.split("/").collect()
+  if parts.length() <= 1 {
+    return
+  }
+  let dirs : Array[StringView] = []
+  for i in 0..<(parts.length() - 1) {
+    dirs.push(parts[i])
+  }
+  let _ = @fs.mkdir(workspace + "/" + dirs.join("/"), recursive=true) catch {
+    _ => ()
+  }
+}
+
+///|
+async fn evaluate_trial(
+  index : Int,
+  case : @cases.EvalCase,
+  workspace : String,
+  log_path : String,
+  exit_code : Int,
+  log_text : String,
+) -> TrialResult {
+  let state_reason = check_expected_state(workspace, case)
+  let validation_reason = run_validation(workspace, case.validation)
+  let leading_shell_use = if log_text.has_prefix("tool: exit=") { 1 } else { 0 }
+  let shell_uses = count_occurrences(log_text, "\ntool: exit=") +
+    leading_shell_use
+  let marker = "file-edit-eval:\{case.id}"
+  let marker_ok = log_text.contains(marker)
+  let validation_passed = validation_reason == ""
+  let reasons : Array[String] = []
+  if exit_code != 0 {
+    reasons.push("agent process exited \{exit_code}")
+  }
+  if state_reason != "" {
+    reasons.push(state_reason)
+  }
+  if validation_reason != "" {
+    reasons.push(validation_reason)
+  }
+  let warnings : Array[String] = []
+  if shell_uses > 0 {
+    warnings.push("shell tool used \{shell_uses} time(s)")
+  }
+  if !marker_ok {
+    warnings.push("finish marker missing")
+  }
+  let success = reasons.length() == 0
+  {
+    index: index + 1,
+    case_id: case.id,
+    success,
+    reason: if success {
+      "ok"
+    } else {
+      reasons.join("; ")
+    },
+    workspace,
+    log_path,
+    exit_code,
+    steps: count_occurrences(log_text, "--- step "),
+    tool_errors: count_occurrences(log_text, "tool error:"),
+    shell_uses,
+    edit_successes: count_occurrences(log_text, "ok: replaced "),
+    write_successes: count_occurrences(log_text, "ok: wrote "),
+    validation_passed,
+    marker_present: marker_ok,
+    warnings: if warnings.length() == 0 {
+      ""
+    } else {
+      warnings.join("; ")
+    },
+  }
+}
+
+///|
+async fn check_expected_state(
+  workspace : String,
+  case : @cases.EvalCase,
+) -> String {
+  for expected in case.expected_files {
+    let path = workspace + "/" + expected.path
+    let content = @fs.read_file(path).text() catch {
+      error => return "missing expected file \{expected.path}: \{error}"
+    }
+    if content != expected.content {
+      return "content mismatch in \{expected.path}"
+    }
+  }
+  for unchanged in case.unchanged_files {
+    let expected = initial_content(case, unchanged) catch {
+      error => return "\{error}"
+    }
+    let path = workspace + "/" + unchanged
+    let content = @fs.read_file(path).text() catch {
+      error => return "unchanged file missing \{unchanged}: \{error}"
+    }
+    if content != expected {
+      return "unchanged file modified: \{unchanged}"
+    }
+  }
+  ""
+}
+
+///|
+fn initial_content(case : @cases.EvalCase, path : String) -> String raise {
+  for file in case.initial_files {
+    if file.path == path {
+      return file.content
+    }
+  }
+  fail("no initial fixture for unchanged file \{path}")
+}
+
+///|
+async fn run_validation(
+  workspace : String,
+  validation : Array[String],
+) -> String {
+  if validation.length() == 0 {
+    return ""
+  }
+  let command = validation[0]
+  let args = [ for i in 1..<validation.length() => validation[i] ]
+  let (code, output) = @process.collect_output_merged(
+    command,
+    args,
+    cwd=workspace,
+  )
+  if code == 0 {
+    ""
+  } else {
+    "validation failed: \{validation.join(" ")} exited \{code}: \{output.text()}"
+  }
+}
+
+///|
+fn count_occurrences(content : String, needle : String) -> Int {
+  if needle == "" {
+    return 0
+  }
+  let pieces = content.split(needle).collect()
+  pieces.length() - 1
+}
+
+///|
+fn count_successes(results : Array[TrialResult]) -> Int {
+  let mut count = 0
+  for result in results {
+    if result.success {
+      count += 1
+    }
+  }
+  count
+}
+
+///|
+fn padded_index(value : Int) -> String {
+  if value < 10 {
+    "0" + value.to_string()
+  } else {
+    value.to_string()
+  }
+}
