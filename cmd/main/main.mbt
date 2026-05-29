@@ -4,7 +4,7 @@ async fn main {
   let api_key = value(matches, "api-key")
   let model = @deepseek.Model::parse(value(matches, "model"))
   let max_steps = max_steps(matches)
-  let system_prompt_text = configured_system_prompt(matches)
+  let system_prompt_text = configured_system_prompt(matches, model)
   let task = values(matches, "task").join(" ")
   @agent.run(api_key, model, task, max_steps~, system_prompt_text~)
 }
@@ -85,11 +85,14 @@ fn max_steps(matches : @argparse.Matches) -> Int raise {
 }
 
 ///|
-async fn configured_system_prompt(matches : @argparse.Matches) -> String {
+async fn configured_system_prompt(
+  matches : @argparse.Matches,
+  model : @deepseek.Model,
+) -> String {
   let base_path = value(matches, "system-prompt-file")
   let addendum_path = value(matches, "system-prompt-addendum-file")
   let base = if base_path == "" {
-    @agent.default_system_prompt()
+    @prompt.system_prompt_for_model(model)
   } else {
     @fs.read_file(base_path).text()
   }
@@ -165,8 +168,26 @@ async test "configured system prompt can replace and append files" {
     ],
     env={ "DEEPSEEK": "test-key" },
   )
-  assert_eq(configured_system_prompt(parsed), "base prompt\n\n\naddendum\n")
+  assert_eq(
+    configured_system_prompt(parsed, V4Flash),
+    "base prompt\n\n\naddendum\n",
+  )
   let _ = @fs.rmdir(dir, recursive=true) catch { _ => () }
+}
+
+///|
+async test "configured system prompt defaults by model" {
+  let parsed = cli_command().parse(argv=["write", "MoonBit"], env={
+    "DEEPSEEK": "test-key",
+  })
+  assert_true(
+    configured_system_prompt(parsed, V4Flash).contains(
+      "OpenSeek Flash Addendum",
+    ),
+  )
+  assert_false(
+    configured_system_prompt(parsed, V4Pro).contains("OpenSeek Flash Addendum"),
+  )
 }
 
 ///|

@@ -8,6 +8,8 @@ import {
 // Values
 pub fn default_system_prompt() -> String
 
+pub fn default_system_prompt_for_model(@deepseek.Model) -> String
+
 pub async fn run(String, @deepseek.Model, String, max_steps? : Int, system_prompt_text? : String) -> Unit
 
 // Errors

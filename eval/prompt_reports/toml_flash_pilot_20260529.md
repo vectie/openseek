@@ -78,6 +78,9 @@ Next prompt/tool work:
 
 - Add a short tool-call protocol guard: do not emit JSON action plans; call the
   provided native tools.
+- Test `eval/prompts/moonbit_core_error_cookbook.md` as a compact builtin
+  MoonBit knowledge addendum, especially for checked errors, `try?`, `catch`,
+  and clean parser/CLI failure behavior.
 - Strengthen routing away from shell for MoonBit commands.
 - Add an acceptance helper that asserts CLI exit codes, JSON validity,
   stdout/stderr cleanliness, file mode, and stdin mode.

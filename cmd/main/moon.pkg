@@ -1,6 +1,7 @@
 import {
   "bobzhang/openseek/agent",
   "bobzhang/openseek/deepseek",
+  "bobzhang/openseek/prompt",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/argparse",

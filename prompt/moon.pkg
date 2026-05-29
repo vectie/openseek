@@ -1,0 +1,19 @@
+import {
+  "bobzhang/openseek/deepseek",
+}
+
+dev_build(
+  rule: "md_to_mbt_string",
+  input: "base_prompt.md",
+  output: "generated_base_prompt.mbt",
+)
+
+dev_build(
+  rule: "md_to_mbt_string",
+  input: "flash_prompt.md",
+  output: "generated_flash_prompt.mbt",
+)
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+native"

@@ -17,6 +17,10 @@ be supplied with `OPENSEEK_MAX_STEPS`; it defaults to `1000`.
 with `OPENSEEK_SYSTEM_PROMPT_FILE` and
 `OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE`.
 
+Without an explicit prompt file, the CLI selects the built-in prompt by model:
+`deepseek-v4-flash` uses `prompt/flash_prompt.md`; `deepseek-v4-pro` uses
+`prompt/base_prompt.md`.
+
 ## Examples
 
 ```bash
@@ -35,8 +39,9 @@ moon run cmd/main -- --max-steps 200 "write tests, fix failures, and summarize"
 ## Package Boundary
 
 This package should stay thin: argument parsing, environment-backed defaults,
-model parsing, and delegation to `@agent.run`. The agent package owns the prompt,
-tool definitions, and execution loop.
+model parsing, prompt override file loading, and delegation to `@agent.run`.
+The prompt package owns built-in prompt selection; the agent package owns tool
+definitions and the execution loop.
 
 Run the package tests with:
 

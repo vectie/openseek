@@ -11,14 +11,9 @@ import {
   "bobzhang/openseek/deepseek",
   "bobzhang/openseek/deepseek/client",
   "bobzhang/openseek/logger",
+  "bobzhang/openseek/prompt",
   "moonbitlang/core/json",
 }
-
-dev_build(
-  rule: "md_to_mbt_string",
-  input: "system_prompt.md",
-  output: "generated_prompt.mbt",
-)
 
 warnings = "+unnecessary_annotation"
 

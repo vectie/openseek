@@ -1,8 +1,9 @@
 # OpenSeek Agent
 
 This package contains the native-only agent loop for `bobzhang/openseek`. It
-owns the system prompt, local tool schemas, native DeepSeek tool-call handling,
-and dispatch for workspace operations.
+owns the local tool schemas, native DeepSeek tool-call handling, and dispatch
+for workspace operations. The built-in prompt text and prompt selection live in
+`bobzhang/openseek/prompt`.
 
 The package depends on:
 
@@ -10,6 +11,8 @@ The package depends on:
   definitions.
 - `bobzhang/openseek/deepseek/client` for HTTP chat requests.
 - `bobzhang/openseek/logger` for async stdout logging.
+- `bobzhang/openseek/prompt` for built-in prompt text and model-aware prompt
+  selection.
 - `bobzhang/openseek/agent_tool` for tool registries, typed tool output, and
   loop-control actions.
 - `moonbitlang/async/fs` and `moonbitlang/async/process` for local tool
@@ -17,11 +20,13 @@ The package depends on:
 
 ## API Shape
 
-- `default_system_prompt()`: return the built-in generated prompt.
+- `default_system_prompt()`: return the base built-in prompt.
+- `default_system_prompt_for_model(model)`: return the model-specific built-in
+  prompt from the prompt package.
 - `run(api_key, model, task, max_steps?, system_prompt_text?)`: run the agent
   loop for one natural-language task. `system_prompt_text` defaults to the
-  built-in prompt so callers can run prompt experiments without rebuilding the
-  package.
+  model-specific built-in prompt so callers can run prompt experiments without
+  rebuilding the package.
 
 `run` creates a DeepSeek client, starts a conversation with a system prompt and
 user task, sends native function tool definitions on each turn, executes any
@@ -35,13 +40,11 @@ The agent client enables DeepSeek V4 thinking mode explicitly with
 `reasoning_content` with tool calls, the agent preserves it in the assistant
 tool-call message for the next request.
 
-The system prompt source lives in `system_prompt.md`. During development,
-`moon.pkg` uses the module-level `md_to_mbt_string` rule plus `dev_build` to
-generate `generated_prompt.mbt`, which exposes it to the agent as a MoonBit
-multiline string. The generated file is committed so downstream users can build
-the package without running local pre-build commands. Other packages can reuse
-the same rule with an input named after the generated function, e.g.
-`input: "help_text.md"` generates `fn help_text() -> String`.
+The base and Flash-specific prompt sources live in the `prompt` package. That
+package uses the module-level `md_to_mbt_string` rule plus `dev_build` to
+generate MoonBit multiline strings from Markdown. The generated files are
+committed so downstream users can build without running local pre-build
+commands.
 
 ## Tools
 

@@ -2,9 +2,15 @@
 let default_max_steps : Int = 1000
 
 ///|
-/// Returns the built-in system prompt generated from `system_prompt.md`.
+/// Returns the base built-in system prompt.
 pub fn default_system_prompt() -> String {
-  system_prompt()
+  @prompt.base_system_prompt()
+}
+
+///|
+/// Returns the default system prompt for a DeepSeek model.
+pub fn default_system_prompt_for_model(model : @deepseek.Model) -> String {
+  @prompt.system_prompt_for_model(model)
 }
 
 ///|
@@ -14,7 +20,7 @@ pub async fn run(
   model : @deepseek.Model,
   task : String,
   max_steps? : Int = default_max_steps,
-  system_prompt_text? : String = default_system_prompt(),
+  system_prompt_text? : String = default_system_prompt_for_model(model),
 ) -> Unit {
   let client = @client.Client(
     api_key~,
