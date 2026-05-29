@@ -7,12 +7,15 @@ variables, and calls `bobzhang/openseek/agent.run`.
 ## Command
 
 ```bash
-moon run cmd/main -- [--api-key sk-...] [--model deepseek-v4-pro] [--max-steps 1000] "task text"
+moon run cmd/main -- [--api-key sk-...] [--model deepseek-v4-pro] [--max-steps 1000] [--system-prompt-file prompt.md] [--system-prompt-addendum-file addendum.md] "task text"
 ```
 
 `--api-key` can also be supplied with `DEEPSEEK`. `--model` can also be supplied
 with `DEEPSEEK_MODEL`; it defaults to `deepseek-v4-pro`. `--max-steps` can also
 be supplied with `OPENSEEK_MAX_STEPS`; it defaults to `1000`.
+`--system-prompt-file` and `--system-prompt-addendum-file` can also be supplied
+with `OPENSEEK_SYSTEM_PROMPT_FILE` and
+`OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE`.
 
 ## Examples
 

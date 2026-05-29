@@ -2,6 +2,7 @@
 pub struct TrialResult {
   index : Int
   case_id : String
+  prompt_label : String
   success : Bool
   reason : String
   workspace : String
@@ -10,6 +11,13 @@ pub struct TrialResult {
   steps : Int
   tool_errors : Int
   shell_uses : Int
+  moon_cmd_uses : Int
+  moon_run_e_mentions : Int
+  moon_run_c_mentions : Int
+  moon_check_uses : Int
+  moon_test_uses : Int
+  moon_info_uses : Int
+  moon_fmt_uses : Int
   edit_successes : Int
   write_successes : Int
   validation_passed : Bool
@@ -20,6 +28,7 @@ pub struct TrialResult {
 ///|
 pub struct EvalReport {
   model : String
+  prompt_label : String
   runs : Int
   min_successes : Int
   successes : Int
@@ -37,6 +46,7 @@ pub async fn run_suite(config : Config) -> EvalReport {
   }
   let report : EvalReport = {
     model: config.model.to_string(),
+    prompt_label: config.prompt_label,
     runs: config.runs,
     min_successes: config.min_successes,
     successes: count_successes(results),
@@ -73,8 +83,16 @@ async fn run_trial(config : Config, index : Int) -> TrialResult {
     config.max_steps.to_string(),
     "--model",
     config.model.to_string(),
-    task,
   ]
+  if config.system_prompt_file != "" {
+    args.push("--system-prompt-file")
+    args.push(config.system_prompt_file)
+  }
+  if config.system_prompt_addendum_file != "" {
+    args.push("--system-prompt-addendum-file")
+    args.push(config.system_prompt_addendum_file)
+  }
+  args.push(task)
   let (exit_code, output) = @process.collect_output_merged(
     "moon",
     args,
@@ -94,7 +112,15 @@ async fn run_trial(config : Config, index : Int) -> TrialResult {
     case.id +
     ".log"
   @fs.write_file(log_path, log_text, create_mode=CreateOrTruncate)
-  evaluate_trial(index, case, workspace, log_path, exit_code, log_text)
+  evaluate_trial(
+    config.prompt_label,
+    index,
+    case,
+    workspace,
+    log_path,
+    exit_code,
+    log_text,
+  )
 }
 
 ///|
@@ -104,6 +130,7 @@ async fn write_fixture(workspace : String, case : @cases.EvalCase) -> Unit {
 
 ///|
 async fn evaluate_trial(
+  prompt_label : String,
   index : Int,
   case : @cases.EvalCase,
   workspace : String,
@@ -140,6 +167,7 @@ async fn evaluate_trial(
   {
     index: index + 1,
     case_id: case.id,
+    prompt_label,
     success,
     reason: if success {
       "ok"
@@ -152,6 +180,17 @@ async fn evaluate_trial(
     steps: count_occurrences(log_text, "--- step "),
     tool_errors: count_occurrences(log_text, "tool error:"),
     shell_uses,
+    moon_cmd_uses: count_lines_containing_all(log_text, ["command=moon "]),
+    moon_run_e_mentions: count_lines_containing_all(log_text, [
+      "moon run", " -e",
+    ]),
+    moon_run_c_mentions: count_lines_containing_all(log_text, [
+      "moon run", " -c",
+    ]),
+    moon_check_uses: count_lines_containing_all(log_text, ["command=moon check"]),
+    moon_test_uses: count_lines_containing_all(log_text, ["command=moon test"]),
+    moon_info_uses: count_lines_containing_all(log_text, ["command=moon info"]),
+    moon_fmt_uses: count_lines_containing_all(log_text, ["command=moon fmt"]),
     edit_successes: count_occurrences(log_text, "ok: replaced "),
     write_successes: count_occurrences(log_text, "ok: wrote "),
     validation_passed,
@@ -221,6 +260,24 @@ fn count_occurrences(content : String, needle : String) -> Int {
   }
   let pieces = content.split(needle).collect()
   pieces.length() - 1
+}
+
+///|
+fn count_lines_containing_all(content : String, needles : Array[String]) -> Int {
+  let mut count = 0
+  for piece in content.split("\n") {
+    let line = piece.to_owned()
+    let mut matched = true
+    for needle in needles {
+      if !line.contains(needle) {
+        matched = false
+      }
+    }
+    if matched {
+      count += 1
+    }
+  }
+  count
 }
 
 ///|

@@ -4,8 +4,9 @@ async fn main {
   let api_key = value(matches, "api-key")
   let model = @deepseek.Model::parse(value(matches, "model"))
   let max_steps = max_steps(matches)
+  let system_prompt_text = configured_system_prompt(matches)
   let task = values(matches, "task").join(" ")
-  @agent.run(api_key, model, task, max_steps~)
+  @agent.run(api_key, model, task, max_steps~, system_prompt_text~)
 }
 
 ///|
@@ -34,6 +35,20 @@ fn cli_command() -> @argparse.Command {
         env="OPENSEEK_MAX_STEPS",
         default_values=["1000"],
         about="Maximum number of agent loop steps before stopping.",
+      ),
+      OptionArg(
+        "system-prompt-file",
+        long="system-prompt-file",
+        env="OPENSEEK_SYSTEM_PROMPT_FILE",
+        default_values=[""],
+        about="Read the complete system prompt from this file instead of the built-in prompt.",
+      ),
+      OptionArg(
+        "system-prompt-addendum-file",
+        long="system-prompt-addendum-file",
+        env="OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE",
+        default_values=[""],
+        about="Append this file to the selected system prompt for prompt experiments.",
       ),
     ],
     positionals=[
@@ -70,6 +85,27 @@ fn max_steps(matches : @argparse.Matches) -> Int raise {
 }
 
 ///|
+async fn configured_system_prompt(matches : @argparse.Matches) -> String {
+  let base_path = value(matches, "system-prompt-file")
+  let addendum_path = value(matches, "system-prompt-addendum-file")
+  let base = if base_path == "" {
+    @agent.default_system_prompt()
+  } else {
+    @fs.read_file(base_path).text()
+  }
+  if addendum_path == "" {
+    base
+  } else {
+    let addendum = @fs.read_file(addendum_path).text()
+    (
+      $|\{base}
+      $|
+      $|\{addendum}
+    )
+  }
+}
+
+///|
 fn parse_positive_int(input : String, label : String) -> Int raise {
   let parsed = @string.parse_int(input) catch {
     _ => fail("\{label} must be a positive integer, got: \{input}")
@@ -86,10 +122,14 @@ test "cli parses env backed options and task" {
     "DEEPSEEK": "test-key",
     "DEEPSEEK_MODEL": "deepseek-v4-pro",
     "OPENSEEK_MAX_STEPS": "120",
+    "OPENSEEK_SYSTEM_PROMPT_FILE": "/tmp/prompt-a.md",
+    "OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE": "/tmp/prompt-b.md",
   })
   assert_eq(value(parsed, "api-key"), "test-key")
   assert_eq(value(parsed, "model"), "deepseek-v4-pro")
   assert_eq(max_steps(parsed), 120)
+  assert_eq(value(parsed, "system-prompt-file"), "/tmp/prompt-a.md")
+  assert_eq(value(parsed, "system-prompt-addendum-file"), "/tmp/prompt-b.md")
   assert_eq(values(parsed, "task").join(" "), "write MoonBit")
 }
 
@@ -109,6 +149,24 @@ test "cli parses max steps option" {
     env={ "DEEPSEEK": "test-key" },
   )
   assert_eq(max_steps(parsed), 25)
+}
+
+///|
+async test "configured system prompt can replace and append files" {
+  let dir = @fs.tmpdir(prefix="openseek-prompt-config-")
+  let prompt_path = dir + "/prompt.md"
+  let addendum_path = dir + "/addendum.md"
+  @fs.write_file(prompt_path, "base prompt\n", create_mode=CreateOrTruncate)
+  @fs.write_file(addendum_path, "addendum\n", create_mode=CreateOrTruncate)
+  let parsed = cli_command().parse(
+    argv=[
+      "--system-prompt-file", prompt_path, "--system-prompt-addendum-file", addendum_path,
+      "write", "MoonBit",
+    ],
+    env={ "DEEPSEEK": "test-key" },
+  )
+  assert_eq(configured_system_prompt(parsed), "base prompt\n\n\naddendum\n")
+  let _ = @fs.rmdir(dir, recursive=true) catch { _ => () }
 }
 
 ///|

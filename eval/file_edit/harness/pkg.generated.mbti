@@ -19,11 +19,15 @@ pub struct Config {
   max_steps : Int
   out_dir : String
   repo_root : String
+  prompt_label : String
+  system_prompt_file : String
+  system_prompt_addendum_file : String
 }
-pub fn Config::Config(api_key~ : String, model~ : @deepseek.Model, runs~ : Int, min_successes~ : Int, max_steps~ : Int, out_dir~ : String, repo_root~ : String) -> Self
+pub fn Config::Config(api_key~ : String, model~ : @deepseek.Model, runs~ : Int, min_successes~ : Int, max_steps~ : Int, out_dir~ : String, repo_root~ : String, prompt_label~ : String, system_prompt_file~ : String, system_prompt_addendum_file~ : String) -> Self
 
 pub struct EvalReport {
   model : String
+  prompt_label : String
   runs : Int
   min_successes : Int
   successes : Int
@@ -37,6 +41,7 @@ pub fn EvalReport::passed(Self) -> Bool
 pub struct TrialResult {
   index : Int
   case_id : String
+  prompt_label : String
   success : Bool
   reason : String
   workspace : String
@@ -45,6 +50,13 @@ pub struct TrialResult {
   steps : Int
   tool_errors : Int
   shell_uses : Int
+  moon_cmd_uses : Int
+  moon_run_e_mentions : Int
+  moon_run_c_mentions : Int
+  moon_check_uses : Int
+  moon_test_uses : Int
+  moon_info_uses : Int
+  moon_fmt_uses : Int
   edit_successes : Int
   write_successes : Int
   validation_passed : Bool

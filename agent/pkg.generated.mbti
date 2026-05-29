@@ -6,7 +6,9 @@ import {
 }
 
 // Values
-pub async fn run(String, @deepseek.Model, String, max_steps? : Int) -> Unit
+pub fn default_system_prompt() -> String
+
+pub async fn run(String, @deepseek.Model, String, max_steps? : Int, system_prompt_text? : String) -> Unit
 
 // Errors
 

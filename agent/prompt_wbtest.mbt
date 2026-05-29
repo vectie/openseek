@@ -4,6 +4,8 @@ test "system prompt includes moonbit guide" {
   assert_true(prompt.contains("# Agent Workflow"))
   assert_true(prompt.contains("MoonBit Error Handling"))
   assert_true(prompt.contains("--warn-list +unnecessary_annotation"))
+  assert_true(prompt.contains("moon run -e"))
+  assert_false(prompt.contains("moon run -c"))
   assert_true(prompt.contains("cache-friendly"))
   assert_true(prompt.contains("moon_ide outline"))
   assert_true(prompt.contains("start_line"))

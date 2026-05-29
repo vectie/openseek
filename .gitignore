@@ -5,6 +5,8 @@ _build/
 .repos/
 eval/*
 !eval/README.md
+!eval/prompts/
+!eval/prompts/**
 !eval/file_edit/
 !eval/file_edit/**
 !eval/report/

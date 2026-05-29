@@ -7,6 +7,21 @@ test "cli defaults to flash baseline" {
   assert_eq(config.runs, 10)
   assert_eq(config.min_successes, 8)
   assert_eq(config.max_steps, 200)
+  assert_eq(config.prompt_label, "builtin")
+  assert_eq(config.system_prompt_file, "")
+  assert_eq(config.system_prompt_addendum_file, "")
+}
+
+///|
+test "cli parses prompt experiment options" {
+  let matches = cli_command().parse(argv=[
+    "--api-key", "test-key", "--prompt-label", "run-e-addendum", "--system-prompt-file",
+    "prompts/base.md", "--system-prompt-addendum-file", "prompts/run-e.md",
+  ])
+  let config = config_from_matches(matches)
+  assert_eq(config.prompt_label, "run-e-addendum")
+  assert_eq(config.system_prompt_file, "prompts/base.md")
+  assert_eq(config.system_prompt_addendum_file, "prompts/run-e.md")
 }
 
 ///|

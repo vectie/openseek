@@ -2,12 +2,19 @@
 let default_max_steps : Int = 1000
 
 ///|
+/// Returns the built-in system prompt generated from `system_prompt.md`.
+pub fn default_system_prompt() -> String {
+  system_prompt()
+}
+
+///|
 /// Runs the OpenSeek agent loop for a single task.
 pub async fn run(
   api_key : String,
   model : @deepseek.Model,
   task : String,
   max_steps? : Int = default_max_steps,
+  system_prompt_text? : String = default_system_prompt(),
 ) -> Unit {
   let client = @client.Client(
     api_key~,
@@ -23,7 +30,7 @@ pub async fn run(
     }
   }
   let messages : Array[@deepseek.ChatMessage] = [
-    ChatMessage(System, content=system_prompt()),
+    ChatMessage(System, content=system_prompt_text),
     ChatMessage(User, content=task),
   ]
   for step in 0..<max_steps {

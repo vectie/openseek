@@ -17,8 +17,11 @@ The package depends on:
 
 ## API Shape
 
-- `run(api_key, model, task, max_steps?)`: run the agent loop for one
-  natural-language task.
+- `default_system_prompt()`: return the built-in generated prompt.
+- `run(api_key, model, task, max_steps?, system_prompt_text?)`: run the agent
+  loop for one natural-language task. `system_prompt_text` defaults to the
+  built-in prompt so callers can run prompt experiments without rebuilding the
+  package.
 
 `run` creates a DeepSeek client, starts a conversation with a system prompt and
 user task, sends native function tool definitions on each turn, executes any

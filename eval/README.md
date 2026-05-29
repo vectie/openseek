@@ -69,6 +69,72 @@ For SWE-AGI-compatible scoring, mirror its public/private split:
 - `run-metrics.json`: runner, elapsed time, exit code, and test summary
 - `log.jsonl` and `log.yaml`: raw and readable agent transcript
 
+## Prompt A/B MoonBit Task Set
+
+File-editing evals are useful for checking agent plumbing, but they are too
+shallow to measure MoonBit prompt quality. Prompt experiments should use
+MoonBit-heavy tasks with real compilation, tests, and CLI probes.
+
+Run each prompt variant with `deepseek-v4-flash` first. Keep the task statement,
+workspace scaffold, visible tests, max steps, and model fixed. Run at least
+three repetitions per variant before promoting a prompt change; use five when a
+task is noisy.
+
+Start with these tasks:
+
+1. **TOML Parser And CLI**
+   Build a TOML subset parser with strings, integers, booleans, arrays, tables,
+   dotted keys, comments, duplicate-key errors, and a native CLI supporting file
+   and stdin input. This is the first serious prompt test because it stresses
+   MoonBit syntax, data modeling, parser structure, native CLI args, and
+   `moon run -e` probing.
+
+2. **JSONPath Query CLI**
+   Implement `$`, child access, bracket access, array indexes, wildcards,
+   descendants, and simple equality filters over `Json`. This tests API
+   discovery, structured errors, and command quoting/log behavior.
+
+3. **Markdown Frontmatter Indexer**
+   Parse frontmatter and Markdown headings across many files, then expose stable
+   JSON/JSON Lines filters through a CLI. This tests filesystem traversal,
+   malformed input handling, stable ordering, and stdout/stderr hygiene.
+
+4. **Async File Statistics Pipeline**
+   Build a native-only async CLI that walks a directory, reads files
+   concurrently, and emits deterministic JSON statistics. This directly probes
+   whether the prompt improves `moonbitlang/async` API discovery and repair.
+
+5. **Failing Package Repair**
+   Give the agent a package with a fixed public API and 10-20 failing tests.
+   Require it to repair behavior without changing the generated `.mbti` surface.
+   This measures practical debugging discipline, minimal diffs, and whether the
+   prompt makes the agent validate before finishing.
+
+6. **Expression Parser And Evaluator**
+   Implement a Pratt or precedence-climbing parser with spans and structured
+   diagnostics. This separates general algorithmic reasoning from MoonBit
+   syntax/tooling failures.
+
+For each run, monitor the log in addition to final tests:
+
+- `moon run -e` and stdin probe use when syntax/API uncertainty appears
+- any `moon run -c` mention, which should trend to zero
+- `moon_ide doc`, `outline`, `peek_def`, and `find_references` use before
+  unfamiliar APIs or existing-code edits
+- compiler/test repair loops and whether the same root cause repeats
+- avoidable tool-call failures: bad schema fields, stale edits, shell bypasses,
+  and malformed MoonBit command arguments
+- validation coverage before finish: `moon check`, targeted `moon test`,
+  `moon info`, `moon fmt`, and task-specific CLI probes
+- CLI contract quality: file mode, stdin mode, exit codes, valid JSON/JSON
+  Lines, clean stdout/stderr, and no leaked runtime debug output
+- final-summary honesty: whether the agent accurately reports commands it ran
+  and any remaining caveats
+
+Keep a prompt change only when it improves task outcomes and the behavior trace.
+Do not promote a wording change that merely gets lucky on pass/fail while
+increasing repeated tool errors, API guessing, or unverified final claims.
+
 ## Ten Non-TOML Harnesses
 
 ### 1. Moon Workspace Dependency Planner

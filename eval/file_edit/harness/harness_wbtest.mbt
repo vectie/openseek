@@ -20,6 +20,7 @@ async test "dry run exact replacement oracle" {
     create_mode=CreateOrTruncate,
   )
   let result = evaluate_trial(
+    "builtin",
     0,
     case,
     workspace,
@@ -29,6 +30,7 @@ async test "dry run exact replacement oracle" {
   )
   assert_true(result.success)
   assert_eq(result.reason, "ok")
+  assert_eq(result.prompt_label, "builtin")
   assert_eq(result.edit_successes, 1)
   assert_true(result.marker_present)
   let _ = @fs.rmdir(root, recursive=true) catch { _ => () }
@@ -41,9 +43,40 @@ test "count_occurrences counts non-overlapping markers" {
 }
 
 ///|
+test "log monitor counts prompt-sensitive moon commands" {
+  let log_text =
+    #|tool: cwd=.
+    #|command=moon run -e fn main { println("ok") }
+    #|exit=0
+    #|tool error: cwd=.
+    #|command=moon run -c fn main { println("old") }
+    #|exit=1
+    #|tool: cwd=.
+    #|command=moon check
+    #|exit=0
+    #|tool: cwd=.
+    #|command=moon test
+    #|exit=0
+    #|tool: cwd=.
+    #|command=moon info
+    #|exit=0
+    #|tool: cwd=.
+    #|command=moon fmt
+    #|exit=0
+  assert_eq(count_lines_containing_all(log_text, ["command=moon "]), 6)
+  assert_eq(count_lines_containing_all(log_text, ["moon run", " -e"]), 1)
+  assert_eq(count_lines_containing_all(log_text, ["moon run", " -c"]), 1)
+  assert_eq(count_lines_containing_all(log_text, ["command=moon check"]), 1)
+  assert_eq(count_lines_containing_all(log_text, ["command=moon test"]), 1)
+  assert_eq(count_lines_containing_all(log_text, ["command=moon info"]), 1)
+  assert_eq(count_lines_containing_all(log_text, ["command=moon fmt"]), 1)
+}
+
+///|
 test "markdown report summarizes threshold" {
   let report : EvalReport = {
     model: "deepseek-v4-flash",
+    prompt_label: "builtin",
     runs: 1,
     min_successes: 1,
     successes: 1,
@@ -52,6 +85,7 @@ test "markdown report summarizes threshold" {
       {
         index: 1,
         case_id: "exact_replace",
+        prompt_label: "builtin",
         success: true,
         reason: "ok",
         workspace: "ws",
@@ -60,6 +94,13 @@ test "markdown report summarizes threshold" {
         steps: 3,
         tool_errors: 0,
         shell_uses: 0,
+        moon_cmd_uses: 1,
+        moon_run_e_mentions: 1,
+        moon_run_c_mentions: 0,
+        moon_check_uses: 1,
+        moon_test_uses: 0,
+        moon_info_uses: 0,
+        moon_fmt_uses: 0,
         edit_successes: 1,
         write_successes: 0,
         validation_passed: true,
@@ -70,5 +111,6 @@ test "markdown report summarizes threshold" {
   }
   let text = report.markdown()
   assert_true(text.contains("1/1"))
+  assert_true(text.contains("builtin"))
   assert_true(text.contains("exact_replace"))
 }
