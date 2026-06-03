@@ -18,20 +18,19 @@ pub(all) enum Level {
   WARN
   ERROR
 }
-pub fn Level::label(Self) -> String
-pub fn Level::rank(Self) -> Int
 
 pub struct LogSink {
   // private fields
 }
-pub async fn LogSink::write_object(Self, Map[String, Json]) -> Unit
+pub fn LogSink::write_object_begin(Self) -> Unit
+pub async fn LogSink::write_object_end(Self) -> Unit
+pub fn[T : ToJson] LogSink::write_object_field(Self, String, T) -> Unit
 
 pub struct Logger {
   // private fields
 }
 pub fn Logger::Logger(@stdio.Output, min_level? : Level) -> Self
 pub fn Logger::at(Self, Level) -> LogSink?
-pub fn Logger::enabled(Self, Level) -> Bool
 
 // Type aliases
 

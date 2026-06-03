@@ -10,7 +10,7 @@ pub(all) enum Level {
 }
 
 ///|
-pub fn Level::rank(self : Level) -> Int {
+fn Level::rank(self : Level) -> Int {
   match self {
     TRACE => 0
     DEBUG => 1
@@ -21,7 +21,7 @@ pub fn Level::rank(self : Level) -> Int {
 }
 
 ///|
-pub fn Level::label(self : Level) -> String {
+fn Level::label(self : Level) -> String {
   match self {
     TRACE => "TRACE"
     DEBUG => "DEBUG"
@@ -51,14 +51,14 @@ pub fn stdout(min_level? : Level = INFO) -> Logger {
 }
 
 ///|
-pub fn Logger::enabled(self : Logger, level : Level) -> Bool {
+fn Logger::enabled(self : Logger, level : Level) -> Bool {
   level.rank() >= self.min_level.rank()
 }
 
 ///|
 pub fn Logger::at(self : Logger, level : Level) -> LogSink? {
   if self.enabled(level) {
-    Some({ output: self.output })
+    Some({ output: self.output, fields: {} })
   } else {
     None
   }
@@ -67,14 +67,26 @@ pub fn Logger::at(self : Logger, level : Level) -> LogSink? {
 ///|
 pub struct LogSink {
   priv output : @stdio.Output
+  priv mut fields : Map[String, Json]
 }
 
 ///|
-pub async fn LogSink::write_object(
+pub fn LogSink::write_object_begin(self : LogSink) -> Unit {
+  self.fields = {}
+}
+
+///|
+pub fn[T : ToJson] LogSink::write_object_field(
   self : LogSink,
-  fields : Map[String, Json],
+  name : String,
+  value : T,
 ) -> Unit {
-  self.output.write(Json::object(fields).stringify() + "\n")
+  self.fields[name] = value.to_json()
+}
+
+///|
+pub async fn LogSink::write_object_end(self : LogSink) -> Unit {
+  self.output.write(Json::object(self.fields).stringify() + "\n")
 }
 
 ///|
