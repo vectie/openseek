@@ -32,7 +32,13 @@ jobs:
       - name: Update MoonBit dependencies
         run: |
           moon version --all
-          moon update
+          for attempt in 1 2 3; do
+            if moon update; then
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          exit 1
 
       - name: Check formatting
         run: moon fmt --check
