@@ -7,22 +7,46 @@ on:
 
 jobs:
   check:
+    name: check (${{ matrix.moonbit-channel }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Temporarily disabled until `<?` is available on stable/latest.
+          # - moonbit-channel: stable
+          #   moonbit-version: latest
+          - moonbit-channel: nightly
+            moonbit-version: nightly
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Set up MoonBit
+      - name: Set up MoonBit (${{ matrix.moonbit-channel }})
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "${{ matrix.moonbit-version }}"
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
 
-      - name: Update MoonBit dependencies
+      - name: Show MoonBit version
         run: |
           moon version --all
-          moon update
+
+      - name: Seed MoonBit registry index
+        run: |
+          mkdir -p "$HOME/.moon/registry"
+          for attempt in 1 2 3; do
+            rm -rf "$HOME/.moon/registry/index"
+            if git \
+              -c http.lowSpeedLimit=1000 \
+              -c http.lowSpeedTime=60 \
+              clone --depth 1 https://mooncakes.io/git/index "$HOME/.moon/registry/index"; then
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          exit 1
 
       - name: Check formatting
         run: moon fmt --check
