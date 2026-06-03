@@ -7,16 +7,26 @@ on:
 
 jobs:
   check:
+    name: check (${{ matrix.moonbit-channel }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Temporarily disabled until `<?` is available on stable/latest.
+          # - moonbit-channel: stable
+          #   moonbit-version: latest
+          - moonbit-channel: nightly
+            moonbit-version: nightly
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Set up MoonBit
+      - name: Set up MoonBit (${{ matrix.moonbit-channel }})
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "${{ matrix.moonbit-version }}"
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
 
       - name: Update MoonBit dependencies
