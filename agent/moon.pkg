@@ -9,10 +9,10 @@ import {
   "bobzhang/openseek/agent_tool/write",
   "bobzhang/openseek/deepseek",
   "bobzhang/openseek/deepseek/client",
-  "bobzhang/openseek/logger",
   "bobzhang/openseek/prompt",
   "moonbitlang/async",
   "moonbitlang/core/json",
+  "tonyfettes/xlog",
 }
 
 warnings = "+unnecessary_annotation"

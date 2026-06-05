@@ -53,7 +53,7 @@ async fn run_with_runtime(
   )
   let tools = tool_definitions(runtime, scope) catch {
     error => {
-      log.at(ERROR) <? { "event": "agent_setup_failed", "error": "\{error}" }
+      @xlog.error() <? { "event": "agent_setup_failed", "error": "\{error}" }
       return
     }
   }
@@ -63,18 +63,18 @@ async fn run_with_runtime(
   ]
   for step in 0..<max_steps {
     if runtime_update_message(runtime.drain_events()) is Some(update) {
-      log.at(INFO) <? { "event": "runtime_update", "content": update }
+      @xlog.info() <? { "event": "runtime_update", "content": update }
       messages.push(ChatMessage(User, content=update))
     }
-    log.at(INFO) <? { "event": "agent_step", "step": step + 1 }
+    @xlog.info() <? { "event": "agent_step", "step": step + 1 }
     let response = client.chat(messages, tools=tools.function_tools())
     if response.content != "" {
-      log.at(INFO) <?
+      @xlog.info() <?
         { "event": "assistant_message", "content": response.content }
     }
     print_usage(response.usage)
     if response.tool_calls.length() == 0 {
-      log.at(INFO) <? { "event": "agent_finished", "answer": response.content }
+      @xlog.info() <? { "event": "agent_finished", "answer": response.content }
       return
     }
     let reasoning_content = match response.reasoning_content {
@@ -91,7 +91,7 @@ async fn run_with_runtime(
     for native_call in response.tool_calls {
       let tool_call = @agent_tool.AgentToolCall(native_call) catch {
         error => {
-          log.at(ERROR) <?
+          @xlog.error() <?
             {
               "event": "tool_call_decode_error",
               "tool_call_id": native_call.id,
@@ -107,16 +107,16 @@ async fn run_with_runtime(
       let result = @agent_tool.execute_tool_call(tool_call, tools)
       let output = match result {
         Control(Finish(answer)) => {
-          log.at(INFO) <? { "event": "agent_finished", "answer": answer }
+          @xlog.info() <? { "event": "agent_finished", "answer": answer }
           return
         }
         Control(Abort(reason)) => {
-          log.at(WARN) <? { "event": "agent_aborted", "reason": reason }
+          @xlog.warn() <? { "event": "agent_aborted", "reason": reason }
           return
         }
         Respond(output) => output
       }
-      log.at(INFO) <?
+      @xlog.info() <?
         {
           "event": "tool_result",
           "tool_call_id": native_call.id,
@@ -127,7 +127,7 @@ async fn run_with_runtime(
       messages.push(ChatMessage(Tool(native_call.id), content=output.content))
     }
   }
-  log.at(WARN) <? { "event": "max_steps_exhausted" }
+  @xlog.warn() <? { "event": "max_steps_exhausted" }
 }
 
 ///|
@@ -202,11 +202,8 @@ test "moon_check update message coalesces by watcher key" {
 }
 
 ///|
-let log : @logger.Logger = @logger.stdout(min_level=INFO)
-
-///|
-async fn print_usage(usage : @deepseek.Usage) -> Unit {
-  log.at(INFO) <?
+fn print_usage(usage : @deepseek.Usage) -> Unit {
+  @xlog.info() <?
     {
       "event": "usage",
       "prompt_tokens": usage.prompt_tokens,
