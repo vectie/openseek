@@ -7,6 +7,7 @@ import {
   "moonbitlang/async@0.19.1",
   "moonbitlang/x@0.4.45",
   "moonbit-community/displaytext@0.1.4",
+  "tonyfettes/xlog@0.4.0",
 }
 
 readme = "README.mbt.md"
