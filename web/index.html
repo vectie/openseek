@@ -107,7 +107,23 @@
     .brand { font-size: 15px; margin: 0 0 4px; letter-spacing: .2px; }
     .status { color: var(--muted); font-size: 12px; }
     .sidebar-empty { padding: 8px 16px; color: var(--muted); font-style: italic; }
-    .session-list { flex: 1 1 auto; overflow-y: auto; list-style: none; margin: 0; padding: 8px 12px; }
+    .session-list { flex: 1 1 auto; overflow-y: auto; margin: 0; padding: 8px 12px; }
+    .session-root { margin-bottom: 10px; }
+    .session-root-label {
+      padding: 6px 4px 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-family: ui-monospace, monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .session-root-sessions {
+      list-style: none;
+      margin: 0;
+      padding: 0 0 0 10px;
+      border-left: 1px solid var(--border);
+    }
     .session-item {
       padding: 9px 10px;
       border: 1px solid transparent;

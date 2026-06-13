@@ -115,3 +115,106 @@ test "valid_session_id mirrors the store's id rules" {
   inspect(valid_session_id("a/b"), content="false")
   inspect(valid_session_id("a\\b"), content="false")
 }
+
+///|
+async test "discover_session_roots scans recursively and skips heavy dirs" {
+  let root = @fs.tmpdir(prefix="openseek-viz-scan-")
+  @fs.mkdir(root + "/app/.openseek/sessions", recursive=true)
+  @fs.mkdir(root + "/packages/lib/.openseek/sessions", recursive=true)
+  @fs.mkdir(root + "/.git/ignored/.openseek/sessions", recursive=true)
+  @fs.mkdir(root + "/node_modules/ignored/.openseek/sessions", recursive=true)
+  @fs.mkdir(root + "/.mooncakes/ignored/.openseek/sessions", recursive=true)
+  @fs.mkdir(root + "/_build/ignored/.openseek/sessions", recursive=true)
+  let roots = discover_session_roots([root], ".openseek").map(path => {
+    path.replace_all(old=root, new="<root>")
+  })
+  @debug.debug_inspect(
+    roots,
+    content=(
+      #|["<root>/app/.openseek", "<root>/packages/lib/.openseek"]
+    ),
+  )
+  @fs.rmdir(root, recursive=true)
+}
+
+///|
+async test "discover_session_roots supports a custom root marker" {
+  let root = @fs.tmpdir(prefix="openseek-viz-openroot-")
+  @fs.mkdir(root + "/app/.openroot/sessions", recursive=true)
+  @fs.mkdir(root + "/app/.openseek/sessions", recursive=true)
+  let roots = discover_session_roots([root], ".openroot").map(path => {
+    path.replace_all(old=root, new="<root>")
+  })
+  @debug.debug_inspect(
+    roots,
+    content=(
+      #|["<root>/app/.openroot"]
+    ),
+  )
+  @fs.rmdir(root, recursive=true)
+}
+
+///|
+test "session catalog lookup supports composite and legacy keys" {
+  let catalog : SessionCatalog = {
+    roots: [
+      {
+        key: "0",
+        path: "app/.openseek",
+        label: "app/.openseek",
+        store: @store.SessionStore("app/.openseek"),
+      },
+      {
+        key: "1",
+        path: "lib/.openseek",
+        label: "lib/.openseek",
+        store: @store.SessionStore("lib/.openseek"),
+      },
+    ],
+  }
+  guard catalog.lookup("1|demo") is Some((root, id)) else {
+    fail("expected composite lookup")
+  }
+  inspect(root.path, content="lib/.openseek")
+  inspect(id, content="demo")
+  guard catalog.lookup("legacy") is Some((root, id)) else {
+    fail("expected legacy lookup")
+  }
+  inspect(root.path, content="app/.openseek")
+  inspect(id, content="legacy")
+  guard catalog.lookup("9|missing") is None else {
+    fail("unexpected missing root lookup")
+  }
+}
+
+///|
+async test "session_list_reply includes root metadata and composite keys" {
+  let root = @fs.tmpdir(prefix="openseek-viz-list-")
+  let app_store = @store.SessionStore(root + "/app/.openseek")
+  let lib_store = @store.SessionStore(root + "/lib/.openseek")
+  app_store.create(@agent_session.Session(SessionId("same"), system_prompt="a"))
+  lib_store.create(@agent_session.Session(SessionId("same"), system_prompt="b"))
+  let catalog : SessionCatalog = {
+    roots: [
+      {
+        key: "0",
+        path: root + "/app/.openseek",
+        label: "app/.openseek",
+        store: app_store,
+      },
+      {
+        key: "1",
+        path: root + "/lib/.openseek",
+        label: "lib/.openseek",
+        store: lib_store,
+      },
+    ],
+  }
+  let reply = session_list_reply(catalog)
+  let text = reply.body
+  assert_true(text.contains("\"key\":\"0|same\""))
+  assert_true(text.contains("\"key\":\"1|same\""))
+  assert_true(text.contains("\"root_label\":\"app/.openseek\""))
+  assert_true(text.contains("\"root_label\":\"lib/.openseek\""))
+  @fs.rmdir(root, recursive=true)
+}

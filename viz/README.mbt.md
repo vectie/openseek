@@ -29,9 +29,9 @@ no browser needed in CI.
 
 - `GET /` → the viewer shell (`web/index.html`)
 - `GET /viz_app.js` → the compiled frontend bundle (auto-located from the moon build output)
-- `GET /api/sessions` → `[{id, last_active, first_prompt}, …]`, most recent first
-- `GET /api/sessions/<id>/events.jsonl` → raw append-only log
-- `GET /api/sessions/<id>/session.json` → raw header (404 when absent; the frontend degrades to events-only)
+- `GET /api/sessions` → `[{key, id, root, root_label, last_active, first_prompt}, …]`, most recent first across all roots
+- `GET /api/sessions/<key>/events.jsonl` → raw append-only log
+- `GET /api/sessions/<key>/session.json` → raw header (404 when absent; the frontend degrades to events-only)
 
 ## Running it
 
@@ -39,14 +39,22 @@ no browser needed in CI.
 # 1. Build the frontend bundle (JS backend)
 moon build cmd/viz_app --target js
 
-# 2. Serve a session root (the server finds the bundle from the build output)
-moon run cmd/viz_server --target native -- --session-root .openseek --port 8080
+# 2. Serve sessions discovered under the current tree
+moon run cmd/viz_server --target native -- --search-dir . --port 8080
 
 # 3. Open http://127.0.0.1:8080
 ```
 
-`--session-root`, `--port`, `--web-dir`, and `--bundle` all have env-var
-fallbacks (`OPENSEEK_SESSION_ROOT`, `OPENSEEK_VIZ_PORT`, …); run with `--help`
+By default the server scans `.` recursively for `.openseek` directories and
+also includes the compatibility `--session-root` (default `.openseek`). The
+scanner skips `.git`, `node_modules`, `.mooncakes`, and `_build`. Repeat
+`--search-dir` to scan several trees, and use `--session-root-name` when a
+different marker such as `.openroot` should be treated as the session root.
+
+`--session-root`, `--search-dir`, `--session-root-name`, `--port`,
+`--web-dir`, and `--bundle` all have env-var fallbacks
+(`OPENSEEK_SESSION_ROOT`, `OPENSEEK_VIZ_SEARCH_DIR`,
+`OPENSEEK_VIZ_SESSION_ROOT_NAME`, `OPENSEEK_VIZ_PORT`, …); run with `--help`
 for the full list.
 
 ## Resilient parsing

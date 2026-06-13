@@ -3,7 +3,9 @@
 /// already returns rows most-recently-active first, so the row only needs an id
 /// and a human label.
 struct SessionRow {
+  key : String
   id : String
+  root_label : String
   first_prompt : String
 }
 
@@ -98,28 +100,30 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
       }
     SessionsFetched(Err(error)) =>
       (@cmd.none, { ..model, status: "failed to list sessions: \{error}" })
-    Select(id) => {
-      let command = fetch_text(emit, session_url(id), result => {
-        SessionFetched(id, result)
+    Select(key) => {
+      let label = session_label(model, key)
+      let command = fetch_text(emit, session_url(key), result => {
+        SessionFetched(key, result)
       })
       (
         command,
         {
           ..model,
-          selected: Some(id),
+          selected: Some(key),
           parsed: None,
           system_prompt: "",
           header_present: false,
           loading: true,
-          status: "loading \{id}…",
+          status: "loading \{label}…",
         },
       )
     }
-    SessionFetched(id, result) =>
+    SessionFetched(key, result) =>
       // Drop a response for a session the user already navigated away from.
-      if model.selected != Some(id) {
+      if model.selected != Some(key) {
         (@cmd.none, model)
       } else {
+        let label = session_label(model, key)
         match result {
           Err(error) =>
             (
@@ -147,7 +151,7 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
                     ..model,
                     parsed: None,
                     loading: false,
-                    status: "session not found: \{id}",
+                    status: "session not found: \{label}",
                   },
                 )
               Malformed =>
@@ -157,7 +161,7 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
                     ..model,
                     parsed: None,
                     loading: false,
-                    status: "malformed response for \{id}",
+                    status: "malformed response for \{label}",
                   },
                 )
             }
@@ -198,6 +202,24 @@ extern "js" fn encode_uri_component(value : String) -> String = "encodeURICompon
 ///|
 fn session_url(id : String) -> String {
   "/api/sessions/\{encode_uri_component(id)}"
+}
+
+///|
+fn session_label(model : Model, key : String) -> String {
+  match session_row(model, key) {
+    Some(row) => row.id
+    None => key
+  }
+}
+
+///|
+fn session_row(model : Model, key : String) -> SessionRow? {
+  for row in model.sessions {
+    if row.key == key {
+      return Some(row)
+    }
+  }
+  None
 }
 
 ///|
@@ -256,10 +278,32 @@ fn sidebar_list(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if model.sessions.is_empty() {
     return @html.div(class="sidebar-empty", "no sessions found")
   }
-  let rows : Array[@html.Html] = [
-    for row in model.sessions => sidebar_row(emit, model, row)
-  ]
-  @html.ul(class="session-list", rows)
+  let sections : Array[@html.Html] = []
+  for root in sidebar_roots(model.sessions) {
+    let rows : Array[@html.Html] = [
+      for row in model.sessions if row.root_label == root => {
+        sidebar_row(emit, model, row)
+      }
+    ]
+    sections.push(
+      @html.div(class="session-root", [
+        @html.div(class="session-root-label", root),
+        @html.ul(class="session-root-sessions", rows),
+      ]),
+    )
+  }
+  @html.div(class="session-list", sections)
+}
+
+///|
+fn sidebar_roots(rows : Array[SessionRow]) -> Array[String] {
+  let roots : Array[String] = []
+  for row in rows {
+    if !roots.contains(row.root_label) {
+      roots.push(row.root_label)
+    }
+  }
+  roots
 }
 
 ///|
@@ -268,14 +312,14 @@ fn sidebar_row(
   model : Model,
   row : SessionRow,
 ) -> @html.Html {
-  let selected = model.selected == Some(row.id)
+  let selected = model.selected == Some(row.key)
   let label = if row.first_prompt.trim().is_empty() {
     row.id
   } else {
     row.first_prompt
   }
   let classes = if selected { "session-item selected" } else { "session-item" }
-  @html.li(class=classes, on_click=emit(Select(row.id)), [
+  @html.li(class=classes, on_click=emit(Select(row.key)), [
     @html.div(class="session-item-label", label),
     @html.div(class="session-item-id", row.id),
   ])
@@ -289,22 +333,30 @@ fn main_pane(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
         class="placeholder",
         "Select a session from the left to view it.",
       )
-    Some(id) =>
+    Some(key) =>
       match model.parsed {
         None =>
           if model.loading {
-            @html.div(class="placeholder", "Loading \{id}…")
+            @html.div(
+              class="placeholder",
+              "Loading \{session_label(model, key)}…",
+            )
           } else {
             @html.div(class="placeholder", model.status)
           }
         Some(parsed) => {
+          let row = session_row(model, key)
+          let id = match row {
+            Some(row) => row.id
+            None => key
+          }
           let session = @viz.session_from_parse(
             parsed,
             id~,
             system_prompt=model.system_prompt,
           )
           @html.div(class="session-view", [
-            header_strip(model, id),
+            header_strip(model, id, row.map(row => row.root_label)),
             mode_toggle(emit, model),
             @viz.render_notices(parsed),
             @viz.render_session(session, model.view_mode),
@@ -315,15 +367,22 @@ fn main_pane(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
-fn header_strip(model : Model, id : String) -> @html.Html {
+fn header_strip(model : Model, id : String, root_label : String?) -> @html.Html {
   let prompt_note = if model.header_present {
     "session.json loaded"
   } else {
     "no session.json (events only)"
   }
+  let root_note = match root_label {
+    Some(root) => " · \{root}"
+    None => ""
+  }
   @html.header(class="header-strip", [
     @html.div(class="header-id", id),
-    @html.div(class="header-meta", "\{model.status} · \{prompt_note}"),
+    @html.div(
+      class="header-meta",
+      "\{model.status} · \{prompt_note}\{root_note}",
+    ),
   ])
 }
 
@@ -373,11 +432,23 @@ fn parse_session_rows(text : String) -> Array[SessionRow]? {
 fn session_row_of(json : Json) -> SessionRow? {
   guard json is Object(fields) else { return None }
   guard fields.get("id") is Some(String(id)) else { return None }
+  let key = match fields.get("key") {
+    Some(String(value)) => value
+    _ => id
+  }
+  let root_label = match fields.get("root_label") {
+    Some(String(value)) => value
+    _ =>
+      match fields.get("root") {
+        Some(String(value)) => value
+        _ => ""
+      }
+  }
   let first_prompt = match fields.get("first_prompt") {
     Some(String(value)) => value
     _ => ""
   }
-  Some({ id, first_prompt })
+  Some({ key, id, root_label, first_prompt })
 }
 
 ///|
