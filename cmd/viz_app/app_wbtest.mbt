@@ -39,12 +39,16 @@ test "parse_load distinguishes not-found from malformed" {
 ///|
 test "parse_session_rows reads the listing, skipping malformed rows" {
   let text =
-    #|[{"id":"a","last_active":1,"first_prompt":"hello"},{"first_prompt":"no id"},{"id":"b","first_prompt":""}]
+    #|[{"key":"0|a","id":"a","root_label":"app/.openseek","last_active":1,"first_prompt":"hello"},{"first_prompt":"no id"},{"id":"b","root":"lib/.openseek","first_prompt":""}]
   guard parse_session_rows(text) is Some(rows) else { fail("expected Some") }
   inspect(rows.length(), content="2")
+  inspect(rows[0].key, content="0|a")
   inspect(rows[0].id, content="a")
+  inspect(rows[0].root_label, content="app/.openseek")
   inspect(rows[0].first_prompt, content="hello")
+  inspect(rows[1].key, content="b")
   inspect(rows[1].id, content="b")
+  inspect(rows[1].root_label, content="lib/.openseek")
 }
 
 ///|
@@ -63,7 +67,22 @@ test "parse_session_rows distinguishes empty list from a non-array body" {
 
 ///|
 test "session_url percent-encodes the id" {
-  inspect(session_url("a b/c"), content="/api/sessions/a%20b%2Fc")
+  inspect(session_url("0|a b/c"), content="/api/sessions/0%7Ca%20b%2Fc")
+}
+
+///|
+test "sidebar_roots preserves listing order without duplicates" {
+  let rows = [
+    { key: "0|a", id: "a", root_label: "app/.openseek", first_prompt: "" },
+    { key: "0|b", id: "b", root_label: "app/.openseek", first_prompt: "" },
+    { key: "1|c", id: "c", root_label: "lib/.openseek", first_prompt: "" },
+  ]
+  @debug.debug_inspect(
+    sidebar_roots(rows),
+    content=(
+      #|["app/.openseek", "lib/.openseek"]
+    ),
+  )
 }
 
 ///|

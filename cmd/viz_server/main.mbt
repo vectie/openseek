@@ -4,12 +4,12 @@
 ///
 /// - `GET /`                                  → the viewer shell (web/index.html)
 /// - `GET /viz_app.js`                        → the compiled frontend bundle
-/// - `GET /api/sessions`                      → JSON listing of known sessions
-/// - `GET /api/sessions/<id>`                 → `{found, events, header}` envelope
-/// - `GET /api/sessions/<id>/events.jsonl`    → raw append-only event log
-/// - `GET /api/sessions/<id>/session.json`    → raw header (404 when absent)
+/// - `GET /api/sessions`                      → JSON listing across known roots
+/// - `GET /api/sessions/<key>`                → `{found, events, header}` envelope
+/// - `GET /api/sessions/<key>/events.jsonl`   → raw append-only event log
+/// - `GET /api/sessions/<key>/session.json`   → raw header (404 when absent)
 ///
-/// It never writes to the store, so pointing it at a live session root is safe.
+/// It never writes to the stores, so pointing it at live session roots is safe.
 async fn main {
   let matches = cli_command().parse(env=@env.get_env_vars())
   let port = parse_port(value(matches, "port"))
@@ -17,6 +17,13 @@ async fn main {
   if session_root.is_empty() {
     fail("--session-root or OPENSEEK_SESSION_ROOT must not be empty")
   }
+  let session_root_name = value(matches, "session-root-name").trim().to_owned()
+  if session_root_name.is_empty() {
+    fail(
+      "--session-root-name or OPENSEEK_VIZ_SESSION_ROOT_NAME must not be empty",
+    )
+  }
+  let search_dirs = non_empty_values(matches, "search-dir")
   let web_dir = value(matches, "web-dir")
   let bundle = value(matches, "bundle")
   let module_root = match @env.args() {
@@ -25,14 +32,17 @@ async fn main {
   }
   let shell = shell_candidates(web_dir, module_root)
   let bundle_paths = bundle_candidates(bundle, web_dir, module_root)
-  let store = @store.SessionStore(session_root)
+  let catalog = session_catalog(session_root, search_dirs, session_root_name)
   let addr = @socket.Addr::parse("127.0.0.1:\{port}")
-  println("openseek viz: serving sessions under '\{session_root}'")
+  println("openseek viz: serving \{catalog.roots.length()} session root(s)")
+  for root in catalog.roots {
+    println("openseek viz: sessions under '\{root.path}'")
+  }
   println("openseek viz: shell from '\{shell[0]}'")
   println("openseek viz: open http://127.0.0.1:\{port}")
   let server = @http.Server(addr)
   server.run_forever((request, _body, conn) => {
-    handle(request, conn, store, shell, bundle_paths)
+    handle(request, conn, catalog, shell, bundle_paths)
   })
 }
 
@@ -55,11 +65,11 @@ struct Reply {
 async fn handle(
   request : @http.Request,
   conn : @http.ServerConnection,
-  store : @store.SessionStore,
+  catalog : SessionCatalog,
   shell : Array[String],
   bundle : Array[String],
 ) -> Unit {
-  let reply = build_reply(request, store, shell, bundle) catch {
+  let reply = build_reply(request, catalog, shell, bundle) catch {
     error => text_reply(500, "Internal Server Error", "error: \{error}")
   }
   send_reply(conn, reply) catch {
@@ -81,7 +91,7 @@ async fn send_reply(conn : @http.ServerConnection, reply : Reply) -> Unit {
 ///|
 async fn build_reply(
   request : @http.Request,
-  store : @store.SessionStore,
+  catalog : SessionCatalog,
   shell : Array[String],
   bundle : Array[String],
 ) -> Reply {
@@ -98,10 +108,10 @@ async fn build_reply(
       search_reply(
         bundle, "text/javascript; charset=utf-8", "viz_app.js not found; build it with: moon build cmd/viz_app --target js",
       )
-    "/api/sessions" => session_list_reply(store)
+    "/api/sessions" => session_list_reply(catalog)
     _ =>
       if path.has_prefix("/api/sessions/") {
-        session_path_reply(store, path)
+        session_path_reply(catalog, path)
       } else {
         text_reply(404, "Not Found", "no route for \{path}")
       }
@@ -109,20 +119,22 @@ async fn build_reply(
 }
 
 ///|
-/// Resolve `/api/sessions/<id>` (envelope) or `/api/sessions/<id>/<file>` (raw).
-/// The `<id>` segment is percent-decoded, so an id containing URL-reserved
-/// characters (spaces, `?`, `#`) still resolves to the right session. The
-/// store's own id validation rejects path separators and `..`, so a crafted id
-/// cannot escape the session directory.
-async fn session_path_reply(
-  store : @store.SessionStore,
-  path : String,
-) -> Reply {
+/// Resolve `/api/sessions/<key>` (envelope) or `/api/sessions/<key>/<file>`
+/// (raw). A key is either legacy `<id>` for the first root, or `<root>|<id>`
+/// for a discovered root. The segment is percent-decoded, so ids containing
+/// URL-reserved characters (spaces, `?`, `#`) still resolve to the right
+/// session. The store's own id validation rejects path separators and `..`, so
+/// a crafted id cannot escape the session directory.
+async fn session_path_reply(catalog : SessionCatalog, path : String) -> Reply {
   let rest = slice_from(path, "/api/sessions/".length())
-  let (id_value, file) = match rest.find("/") {
+  let (key, file) = match rest.find("/") {
     None => (percent_decode(rest), None)
     Some(index) =>
       (percent_decode(slice(rest, 0, index)), Some(slice_from(rest, index + 1)))
+  }
+  let (root, id_value) = match catalog.lookup(key) {
+    Some(found) => found
+    None => return text_reply(404, "Not Found", "session root not found")
   }
   // Validate the id ourselves so a malformed request is a 400, not a 500 from
   // the store's path-building assertion. These are the store's own id rules.
@@ -131,14 +143,14 @@ async fn session_path_reply(
   }
   let id = @agent_session.SessionId(id_value)
   match file {
-    None => session_envelope_reply(store, id)
+    None => session_envelope_reply(root.store, id)
     Some("events.jsonl") =>
       asset_reply(
-        store.event_log_file(id),
+        root.store.event_log_file(id),
         "application/x-ndjson; charset=utf-8",
       )
     Some("session.json") =>
-      asset_reply(store.header_file(id), "application/json; charset=utf-8")
+      asset_reply(root.store.header_file(id), "application/json; charset=utf-8")
     Some(other) =>
       text_reply(404, "Not Found", "no such session file: \{other}")
   }
@@ -194,20 +206,261 @@ async fn session_envelope_reply(
 }
 
 ///|
-async fn session_list_reply(store : @store.SessionStore) -> Reply {
-  let rows : Array[Json] = []
-  for listing in store.listings() {
-    let last_active : Json = match listing.last_active_unix_seconds() {
-      Some(seconds) => Json::number(seconds.to_double())
-      None => Json::null()
+async fn session_list_reply(catalog : SessionCatalog) -> Reply {
+  let rows : Array[SessionListRow] = []
+  for root in catalog.roots {
+    for listing in root.store.listings() {
+      let id = listing.id().value()
+      rows.push({
+        key: session_key(root.key, id),
+        id,
+        root: root.path,
+        root_label: root.label,
+        last_active: listing.last_active_unix_seconds(),
+        first_prompt: listing.first_prompt(),
+      })
     }
-    rows.push({
-      "id": listing.id().value(),
-      "last_active": last_active,
-      "first_prompt": listing.first_prompt(),
+  }
+  rows.sort_by(compare_session_list_rows)
+  json_reply(Array::map(rows, row => row.to_json()).to_json())
+}
+
+///|
+priv struct SessionRoot {
+  key : String
+  path : String
+  label : String
+  store : @store.SessionStore
+}
+
+///|
+priv struct SessionCatalog {
+  roots : Array[SessionRoot]
+}
+
+///|
+priv struct SessionListRow {
+  key : String
+  id : String
+  root : String
+  root_label : String
+  last_active : Int64?
+  first_prompt : String
+}
+
+///|
+fn SessionListRow::to_json(self : SessionListRow) -> Json {
+  let last_active : Json = match self.last_active {
+    Some(seconds) => Json::number(seconds.to_double())
+    None => Json::null()
+  }
+  {
+    "key": self.key,
+    "id": self.id,
+    "root": self.root,
+    "root_label": self.root_label,
+    "last_active": last_active,
+    "first_prompt": self.first_prompt,
+  }
+}
+
+///|
+fn compare_session_list_rows(a : SessionListRow, b : SessionListRow) -> Int {
+  match (a.last_active, b.last_active) {
+    (Some(a_time), Some(b_time)) =>
+      if a_time == b_time {
+        compare_session_list_row_labels(a, b)
+      } else if a_time > b_time {
+        -1
+      } else {
+        1
+      }
+    (Some(_), None) => -1
+    (None, Some(_)) => 1
+    (None, None) => compare_session_list_row_labels(a, b)
+  }
+}
+
+///|
+fn compare_session_list_row_labels(
+  a : SessionListRow,
+  b : SessionListRow,
+) -> Int {
+  let root_order = a.root_label.compare(b.root_label)
+  if root_order != 0 {
+    root_order
+  } else {
+    a.id.compare(b.id)
+  }
+}
+
+///|
+async fn session_catalog(
+  session_root : String,
+  search_dirs : Array[String],
+  session_root_name : String,
+) -> SessionCatalog {
+  let paths : Array[String] = []
+  paths.push(session_root)
+  for root in discover_session_roots(search_dirs, session_root_name) {
+    paths.push(root)
+  }
+  let unique = unique_paths(paths)
+  let roots : Array[SessionRoot] = []
+  for index, path in unique {
+    roots.push({
+      key: index.to_string(),
+      path,
+      label: root_label(path),
+      store: @store.SessionStore(path),
     })
   }
-  json_reply(rows.to_json())
+  { roots, }
+}
+
+///|
+async fn discover_session_roots(
+  search_dirs : Array[String],
+  session_root_name : String,
+) -> Array[String] {
+  let roots : Array[String] = []
+  for dir in search_dirs {
+    scan_session_roots(dir, session_root_name, roots)
+  }
+  roots
+}
+
+///|
+async fn scan_session_roots(
+  dir : String,
+  session_root_name : String,
+  roots : Array[String],
+) -> Unit {
+  guard is_directory(dir) else { return }
+  if path_tail(dir) == session_root_name {
+    roots.push(dir)
+    return
+  }
+  let direct = join_path(dir, session_root_name)
+  if is_directory(direct) {
+    roots.push(direct)
+  }
+  let names = @fs.readdir(dir, sort=true) catch { _ => return }
+  for name in names {
+    if should_skip_scan_dir(name, session_root_name) {
+      continue
+    }
+    let child = join_path(dir, name)
+    if is_directory(child) {
+      scan_session_roots(child, session_root_name, roots)
+    }
+  }
+}
+
+///|
+async fn is_directory(path : String) -> Bool {
+  (@fs.kind(path, follow_symlink=false) catch { _ => return false }) ==
+  Directory
+}
+
+///|
+fn should_skip_scan_dir(name : String, session_root_name : String) -> Bool {
+  name == session_root_name ||
+  name == ".git" ||
+  name == "node_modules" ||
+  name == ".mooncakes" ||
+  name == "_build"
+}
+
+///|
+async fn unique_paths(paths : Array[String]) -> Array[String] {
+  let seen : Array[String] = []
+  let unique : Array[String] = []
+  for path in paths {
+    let key = @fs.realpath(path) catch { _ => path }
+    if !seen.contains(key) {
+      seen.push(key)
+      unique.push(path)
+    }
+  }
+  unique
+}
+
+///|
+fn session_key(root_key : String, id : String) -> String {
+  "\{root_key}|\{id}"
+}
+
+///|
+fn SessionCatalog::lookup(
+  self : SessionCatalog,
+  key : String,
+) -> (SessionRoot, String)? {
+  match key.find("|") {
+    Some(index) => {
+      let root_key = slice(key, 0, index)
+      let id = slice_from(key, index + 1)
+      for root in self.roots {
+        if root.key == root_key {
+          return Some((root, id))
+        }
+      }
+      None
+    }
+    None =>
+      match self.roots {
+        [root, ..] => Some((root, key))
+        [] => None
+      }
+  }
+}
+
+///|
+fn root_label(path : String) -> String {
+  let trimmed = trim_trailing_path_separators(path)
+  if trimmed.is_empty() {
+    path
+  } else {
+    trimmed
+  }
+}
+
+///|
+fn path_tail(path : String) -> String {
+  let trimmed = trim_trailing_path_separators(path)
+  match last_path_separator(trimmed) {
+    Some(index) => slice_from(trimmed, index + 1)
+    None => trimmed
+  }
+}
+
+///|
+fn last_path_separator(path : String) -> Int? {
+  match (path.rev_find("/"), path.rev_find("\\")) {
+    (Some(a), Some(b)) => Some(if a > b { a } else { b })
+    (Some(a), None) => Some(a)
+    (None, Some(b)) => Some(b)
+    (None, None) => None
+  }
+}
+
+///|
+fn trim_trailing_path_separators(path : String) -> String {
+  let mut result = path
+  while result.length() > 1 &&
+        (result.has_suffix("/") || result.has_suffix("\\")) {
+    result = result[:result.length() - 1].to_owned()
+  }
+  result
+}
+
+///|
+fn join_path(parent : String, child : String) -> String {
+  if parent.is_empty() || parent.has_suffix("/") || parent.has_suffix("\\") {
+    parent + child
+  } else {
+    parent + "/" + child
+  }
 }
 
 ///|
@@ -401,7 +654,22 @@ fn cli_command() -> @argparse.Command {
         long="session-root",
         env="OPENSEEK_SESSION_ROOT",
         default_values=[".openseek"],
-        about="Directory containing durable OpenSeek sessions.",
+        about="Compatibility session root to serve in addition to discovered roots.",
+      ),
+      OptionArg(
+        "search-dir",
+        long="search-dir",
+        env="OPENSEEK_VIZ_SEARCH_DIR",
+        action=Append,
+        default_values=["."],
+        about="Directory to scan recursively for session roots; repeat to scan several trees.",
+      ),
+      OptionArg(
+        "session-root-name",
+        long="session-root-name",
+        env="OPENSEEK_VIZ_SESSION_ROOT_NAME",
+        default_values=[".openseek"],
+        about="Directory name treated as an OpenSeek session root during recursive scan.",
       ),
       OptionArg(
         "web-dir",
@@ -427,6 +695,22 @@ fn value(matches : @argparse.Matches, name : String) -> String raise {
     Some([value]) => value
     Some(values) if values.length() > 0 => values[0]
     _ => fail("missing parsed argument: \{name}")
+  }
+}
+
+///|
+fn non_empty_values(
+  matches : @argparse.Matches,
+  name : String,
+) -> Array[String] {
+  match matches.values.get(name) {
+    Some(values) =>
+      [
+        for value in values if !value.trim().is_empty() => {
+          value.trim().to_owned()
+        }
+      ]
+    None => []
   }
 }
 
