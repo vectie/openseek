@@ -30,6 +30,7 @@
 ///   invalid arguments.
 pub fn definition(
   workspace_root? : String = ".",
+  read_only? : Bool = false,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="shell",
@@ -44,7 +45,9 @@ pub fn definition(
       },
       "required": ["cmd"],
     }),
-    execute=Async(arguments => execute_with_workspace(workspace_root, arguments)),
+    execute=Async(arguments => {
+      execute_with_workspace(workspace_root, arguments, read_only~)
+    }),
   )
 }
 
@@ -64,6 +67,7 @@ fn shell_description() -> String {
 async fn execute_with_workspace(
   workspace_root : String,
   arguments : Json,
+  read_only~ : Bool,
 ) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
     error => {
@@ -75,6 +79,18 @@ async fn execute_with_workspace(
     }
   }
   let parsed_command = @shell_parse.parse_for_policy(input.cmd)
+  // Read-only (review) mode: refuse the obvious bulk source-rewriters — a
+  // source-mutating moon command (fmt / info / test --update) anywhere in the
+  // parsed command, including `&&`/`;` chains, pipes, and env prefixes. This is
+  // best-effort: opaque commands are allowed and `moon check`/`moon test` may
+  // still pre-build, so it only stops a review from reformatting/regenerating
+  // the tree wholesale, not every possible mutation.
+  if read_only && review_read_only_blocks(parsed_command) {
+    return @agent_tool.ToolAction::respond(
+      "blocked in read-only review mode: `\{input.cmd}` runs a source-mutating moon command (fmt/info/test --update); a review reports rather than rewrites the tree. Use plain `moon check`/`moon test` (no --update), `git`, or `read`.",
+      is_error=true,
+    )
+  }
   match
     @command_policy.moonbit_command_policy_error_for_parse(
       input.cmd,
