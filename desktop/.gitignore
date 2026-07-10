@@ -1,0 +1,18 @@
+_build/
+dist/
+target/
+.mooncakes/
+.DS_Store
+
+# Proton native runtime assembled by `proton_cli cef setup` (CEF framework +
+# helpers + libproton); hundreds of MB, downloaded/generated, never committed.
+.proton/
+.cef-cache/
+
+# Generated frontend bundle (built by `moon run --target native build_frontend.mbtx`)
+/frontend.js
+# Embedded viewer stylesheet, assembled from the editor submodule by the packager.
+/viewer.css
+# The codicon icon font, copied from the editor submodule next to viewer.css so
+# proton serves it at the site root (`/codicon.ttf`).
+/codicon.ttf

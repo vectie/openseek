@@ -1,0 +1,46 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/fsx"
+
+import {
+  "moonbitlang/x/path",
+}
+
+// Values
+pub async fn copy_file(@path.Path, @path.Path) -> Unit
+
+pub async fn ensure_dir(@path.Path) -> Unit
+
+pub async fn exists(@path.Path) -> Bool
+
+pub async fn is_dir(@path.Path) -> Bool
+
+pub async fn read_text(@path.Path) -> String
+
+pub async fn read_text_if_exists(@path.Path) -> String?
+
+pub async fn remove_if_exists(@path.Path) -> Unit
+
+pub async fn rmdir(@path.Path, recursive? : Bool) -> Unit
+
+pub async fn try_read_text(@path.Path) -> String?
+
+pub async fn write_bytes(@path.Path, Bytes) -> Unit
+
+pub async fn write_text(@path.Path, String) -> Unit
+
+// Errors
+
+// Types and methods
+type Directory
+pub async fn Directory::collect(Self) -> Array[DirectoryEntry]
+pub async fn Directory::next(Self) -> DirectoryEntry?
+pub async fn Directory::try_open(@path.Path) -> Self?
+
+type DirectoryEntry
+pub fn DirectoryEntry::is_dir(Self) -> Bool
+pub fn DirectoryEntry::name(Self) -> String
+
+// Type aliases
+
+// Traits
+

@@ -1,0 +1,387 @@
+name: Desktop
+
+# Kept separate from the root CI (ci.yml): the desktop module is its own
+# MoonBit workspace (desktop/moon.work, with the lepus submodule as members)
+# and is not part of the root moon.work, so the root checks never see it.
+on:
+  push:
+    branches: [main]
+  # No paths filter: the desktop package builds and bundles the root
+  # `cmd/openseek` engine, so a root-side change to the engine or its event
+  # protocol can break the desktop app. Run on every PR (as these jobs did when
+  # they lived in ci.yml) rather than enumerate a brittle dependency path list.
+  pull_request:
+
+jobs:
+  desktop-check:
+    name: desktop check (fmt, check, info)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # The lepus submodule is a private repo, so the default workflow token
+      # cannot clone it. LEPUS_READ_TOKEN is a fine-grained PAT with read-only
+      # access to moonbit-community/lepus. Note: this secret is unavailable to
+      # pull requests from forks, where this job will fail at this step.
+      - name: Check out the lepus submodule
+        env:
+          LEPUS_READ_TOKEN: ${{ secrets.LEPUS_READ_TOKEN }}
+        run: |
+          # Inject the PAT only for this one command via `git -c`, so it never
+          # lands in ~/.gitconfig — where later steps that run PR-controlled
+          # build scripts could read it. (Fork PRs receive no secret and fail
+          # here, as before.)
+          # Init only our submodules, non-recursively: the editor submodule
+          # nests microsoft/vscode + codemirror as reference-only mirrors
+          # (huge, LFS-gated) we never build against; lepus has no nested
+          # submodules, so a plain --init covers both.
+          git \
+            -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
+            submodule update --init desktop/lepus desktop/editor
+
+      - name: Set up MoonBit (nightly)
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- nightly
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: Show MoonBit version
+        run: moon version --all
+
+      - name: Seed MoonBit registry index
+        run: |
+          mkdir -p "$HOME/.moon/registry"
+          for attempt in 1 2 3; do
+            rm -rf "$HOME/.moon/registry/index"
+            if git \
+              -c http.lowSpeedLimit=1000 \
+              -c http.lowSpeedTime=60 \
+              clone --depth 1 https://mooncakes.io/git/index "$HOME/.moon/registry/index"; then
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Install GTK and WebKitGTK dev packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install Lepus codegen tool
+        run: moon -C desktop/lepus install ./cli --bin target/lepus-tools
+
+      - name: Check formatting
+        # Scope to this module's own packages: the vendored editor submodule is
+        # a workspace member but was formatted with a different toolchain, so a
+        # workspace-wide `fmt --check` would flag its source we don't own.
+        run: moon -C desktop fmt --check . frontend internal package
+
+      - name: Check (deny warnings)
+        run: moon -C desktop check --target native --deny-warn
+
+      # The frontend builds to JS; this guards the JS side (and catches native
+      # imports leaking into target-agnostic packages, e.g. a missing
+      # supported_targets) that the native check above cannot see.
+      - name: Check JS target (deny warnings)
+        run: moon -C desktop check --target js --deny-warn
+
+      - name: Check generated interfaces
+        run: |
+          moon -C desktop info --target native
+          # The lepus submodule's own .mbti live inside the submodule and are
+          # not tracked as files by this repo, so this pathspec only validates
+          # the desktop module's own generated interfaces.
+          if [ -n "$(git status --porcelain -- '*.mbti')" ]; then
+            git status --short -- '*.mbti'
+            git diff -- '*.mbti'
+            exit 1
+          fi
+
+  desktop-test:
+    name: desktop test (release)
+    # macOS, not headless Linux: several runtime tests drive a real webview via
+    # app.run(), which needs a GUI session. lepus's own CI skips those tests on
+    # Linux for the same reason. --release links with the system toolchain (the
+    # debug `tcc` path cannot resolve the WebKit/GTK framework flags).
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Check out the lepus submodule
+        env:
+          LEPUS_READ_TOKEN: ${{ secrets.LEPUS_READ_TOKEN }}
+        run: |
+          # Inject the PAT only for this one command via `git -c`, so it never
+          # lands in ~/.gitconfig — where later steps that run PR-controlled
+          # build scripts could read it. (Fork PRs receive no secret and fail
+          # here, as before.)
+          # Init only our submodules, non-recursively: the editor submodule
+          # nests microsoft/vscode + codemirror as reference-only mirrors
+          # (huge, LFS-gated) we never build against; lepus has no nested
+          # submodules, so a plain --init covers both.
+          git \
+            -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
+            submodule update --init desktop/lepus desktop/editor
+
+      - name: Set up MoonBit (nightly)
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- nightly
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: Show MoonBit version
+        run: moon version --all
+
+      - name: Seed MoonBit registry index
+        run: |
+          mkdir -p "$HOME/.moon/registry"
+          for attempt in 1 2 3; do
+            rm -rf "$HOME/.moon/registry/index"
+            if git \
+              -c http.lowSpeedLimit=1000 \
+              -c http.lowSpeedTime=60 \
+              clone --depth 1 https://mooncakes.io/git/index "$HOME/.moon/registry/index"; then
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Install Lepus codegen tool
+        run: moon -C desktop/lepus install ./cli --bin target/lepus-tools
+
+      - name: Test (release)
+        run: moon -C desktop test --release
+
+  desktop-appimage:
+    name: desktop appimage (linux)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # The lepus submodule is a private repo, so the default workflow token
+      # cannot clone it. LEPUS_READ_TOKEN is a fine-grained PAT with read-only
+      # access to moonbit-community/lepus. Note: this secret is unavailable to
+      # pull requests from forks, where this job will fail at this step.
+      - name: Check out the lepus submodule
+        env:
+          LEPUS_READ_TOKEN: ${{ secrets.LEPUS_READ_TOKEN }}
+        run: |
+          # Inject the PAT only for this one command via `git -c`, so it never
+          # lands in ~/.gitconfig — where later steps that run PR-controlled
+          # build scripts could read it. (Fork PRs receive no secret and fail
+          # here, as before.)
+          # Init only our submodules, non-recursively: the editor submodule
+          # nests microsoft/vscode + codemirror as reference-only mirrors
+          # (huge, LFS-gated) we never build against; lepus has no nested
+          # submodules, so a plain --init covers both.
+          git \
+            -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
+            submodule update --init desktop/lepus desktop/editor
+
+      - name: Set up MoonBit (nightly)
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- nightly
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: Show MoonBit version
+        run: |
+          moon version --all
+
+      - name: Seed MoonBit registry index
+        run: |
+          mkdir -p "$HOME/.moon/registry"
+          for attempt in 1 2 3; do
+            rm -rf "$HOME/.moon/registry/index"
+            if git \
+              -c http.lowSpeedLimit=1000 \
+              -c http.lowSpeedTime=60 \
+              clone --depth 1 https://mooncakes.io/git/index "$HOME/.moon/registry/index"; then
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      # libx11-dev: the packager rebuilds libproton from the lepus sources,
+      # whose CMake build pkg-config-checks gtk+-3.0 and x11.
+      - name: Install GTK and WebKitGTK dev packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libx11-dev
+
+      # CI always builds an unstamped bundle: OPENSEEK_CLIENT_TOKEN (the
+      # bearer credential the packaged host presents to the hosted OpenSeek
+      # proxy) is deliberately never provided here, so PR-modifiable
+      # packaging code cannot read it and uploaded artifacts carry no
+      # extractable credential. A stamped bundle requires a manual build
+      # with the secret in the environment.
+      - name: Build the AppImage
+        run: moon -C desktop run --target native package/linux
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenSeek-Desktop-linux-x86_64
+          path: desktop/dist/OpenSeek-Desktop-linux-x86_64.AppImage
+          if-no-files-found: error
+
+  desktop-macos:
+    name: desktop app (macos, unsigned)
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # The lepus submodule is a private repo, so the default workflow token
+      # cannot clone it. LEPUS_READ_TOKEN is a fine-grained PAT with read-only
+      # access to moonbit-community/lepus. Note: this secret is unavailable to
+      # pull requests from forks, where this job will fail at this step.
+      - name: Check out the lepus submodule
+        env:
+          LEPUS_READ_TOKEN: ${{ secrets.LEPUS_READ_TOKEN }}
+        run: |
+          # Inject the PAT only for this one command via `git -c`, so it never
+          # lands in ~/.gitconfig — where later steps that run PR-controlled
+          # build scripts could read it. (Fork PRs receive no secret and fail
+          # here, as before.)
+          # Init only our submodules, non-recursively: the editor submodule
+          # nests microsoft/vscode + codemirror as reference-only mirrors
+          # (huge, LFS-gated) we never build against; lepus has no nested
+          # submodules, so a plain --init covers both.
+          git \
+            -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
+            submodule update --init desktop/lepus desktop/editor
+
+      - name: Set up MoonBit (nightly)
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- nightly
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: Show MoonBit version
+        run: |
+          moon version --all
+
+      - name: Seed MoonBit registry index
+        run: |
+          mkdir -p "$HOME/.moon/registry"
+          for attempt in 1 2 3; do
+            rm -rf "$HOME/.moon/registry/index"
+            if git \
+              -c http.lowSpeedLimit=1000 \
+              -c http.lowSpeedTime=60 \
+              clone --depth 1 https://mooncakes.io/git/index "$HOME/.moon/registry/index"; then
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      # No --sign argument, so the bundle is ad-hoc signed: fine for
+      # debugging, but downloads are quarantined by Gatekeeper on other
+      # machines — clear it before launching:
+      #   xattr -dr com.apple.quarantine "OpenSeek Desktop.app"
+      # Unstamped — no OPENSEEK_CLIENT_TOKEN in CI; see the Linux job's note.
+      - name: Build the app bundle
+        run: moon -C desktop run --target native package/macos
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenSeek-Desktop-macos-arm64
+          path: desktop/dist/OpenSeek Desktop-macos-arm64.zip
+          if-no-files-found: error
+
+  desktop-windows:
+    name: desktop app (windows)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # The lepus submodule is a private repo, so the default workflow token
+      # cannot clone it. LEPUS_READ_TOKEN is a fine-grained PAT with read-only
+      # access to moonbit-community/lepus. Note: this secret is unavailable to
+      # pull requests from forks, where this job will fail at this step.
+      - name: Check out the lepus submodule
+        shell: bash
+        env:
+          LEPUS_READ_TOKEN: ${{ secrets.LEPUS_READ_TOKEN }}
+        run: |
+          # Inject the PAT only for this one command via `git -c`, so it never
+          # lands in ~/.gitconfig — where later steps that run PR-controlled
+          # build scripts could read it. (Fork PRs receive no secret and fail
+          # here, as before.)
+          # Init only our submodules, non-recursively: the editor submodule
+          # nests microsoft/vscode + codemirror as reference-only mirrors
+          # (huge, LFS-gated) we never build against; lepus has no nested
+          # submodules, so a plain --init covers both.
+          git \
+            -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
+            submodule update --init desktop/lepus desktop/editor
+
+      - name: Set up MoonBit (nightly)
+        shell: pwsh
+        env:
+          MOONBIT_INSTALL_VERSION: nightly
+        run: |
+          Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+          irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+          "$env:USERPROFILE\.moon\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Show MoonBit version
+        shell: pwsh
+        run: |
+          moon version --all
+
+      - name: Seed MoonBit registry index
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "$HOME\.moon\registry" | Out-Null
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Remove-Item -Recurse -Force "$HOME\.moon\registry\index" -ErrorAction SilentlyContinue
+            git `
+              -c http.lowSpeedLimit=1000 `
+              -c http.lowSpeedTime=60 `
+              clone --depth 1 https://mooncakes.io/git/index "$HOME\.moon\registry\index"
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+            Start-Sleep -Seconds ($attempt * 10)
+          }
+          exit 1
+
+      # Unstamped — no OPENSEEK_CLIENT_TOKEN in CI; see the Linux job's note.
+      - name: Build the Windows app bundle
+        shell: pwsh
+        run: moon -C desktop run --target native package/windows
+
+      - name: Upload Windows app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenSeek-Desktop-windows-x64
+          path: desktop/dist/OpenSeek Desktop-windows-x64.zip
+          if-no-files-found: error

@@ -1,0 +1,21 @@
+import {
+  "moonbitlang/async",
+  "justjavac/proton",
+  "justjavac/proton/extension" @proton_extension,
+  "openseek_desktop/internal/engine",
+  "openseek_desktop/internal/extension",
+  "openseek_desktop/internal/shellenv",
+  "openseek_desktop/internal/update",
+  "moonbitlang/async/process",
+  "moonbitlang/core/env",
+  "tonyfettes/xlog",
+}
+
+warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "native"
+
+options(
+  "is-main": true,
+  targets: { "main.mbt": [ "native" ] },
+)
