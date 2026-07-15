@@ -15,6 +15,8 @@ entry point so request encoding can be tested without network access.
 | `bobzhang/openseek/agent_session` | Typed durable conversation state and DeepSeek message projection. | `agent_session/README.mbt.md` |
 | `bobzhang/openseek/agent_session/store` | Native filesystem-backed append-only session store. | `agent_session/store/README.mbt.md` |
 | `bobzhang/openseek/agent_tool` | Tool registry, executor, output, and control-action types. | `agent_tool/README.mbt.md` |
+| `bobzhang/openseek_protocol` | Typed engine event stream (own module): the `openseek run`/`serve` stdout wire contract, decodable on every backend. | `protocol/README.mbt.md` |
+| `bobzhang/openseek_protocol/emit` | Native-only writer for that stream: owns each event's log level. | `protocol/emit/README.mbt.md` |
 | `bobzhang/openseek/agent` | Native-only OpenSeek agent loop and local tool dispatch. | `agent/README.mbt.md` |
 | `bobzhang/openseek/cmd/openseek` | Native-only command-line entry point. | `cmd/openseek/README.md` |
 | `bobzhang/openseek/cmd/tui` | Native-only terminal UI library, the default mode of `openseek` (and `openseek tui`). | `cmd/tui/README.md` |
@@ -130,9 +132,9 @@ tool. This keeps the surface small; revisit if a concrete need appears.
 The terminal UI is the **default** mode of the single `openseek` binary (the
 `cmd/tui` library, also reachable as `openseek tui`): a scrolling transcript with
 a live composer. It spawns the `openseek` engine (by default this same binary in
-`serve` mode) and renders its JSONL event stream — streamed thinking and answer
-text appear live on the activity line, and each turn's reasoning is kept as a dim
-`✻` transcript aside above its answer.
+`serve` mode) and renders its JSONL event stream — streamed answer text appears
+live on the activity line, and each turn's reasoning is kept as a dim `✻`
+transcript aside above its answer.
 
 ```bash
 export DEEPSEEK=sk-...
